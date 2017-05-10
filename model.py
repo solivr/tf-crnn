@@ -103,9 +103,8 @@ class CRNN():
         self.config = conf
         self.isTraining = isTraining
         self.rnnSeqLengths = rnnSeqLengths
-        self.conv = deep_cnn(self.inputImgs)
-        self.deep_bidirectional_lstm(self.conv,)
-        self.prob = self.biLstm2
+        self.conv = deep_cnn()
+        self.prob = deep_bidirectional_lstm()
 
     def deep_cnn(self) -> tf.Tensor:
         if self.config.input_shape:
@@ -158,7 +157,7 @@ class CRNN():
 
             self.cnn_net = net
 
-            with tf.variable_scope('Reshaping'):
+            with tf.variable_scope('Reshaping_cnn'):
                 shape = self.cnn_net.get_shape().as_list()  # [batch, height, width, features]
                 transposed = tf.transpose(self.cnn_net, perm=[0, 2, 1, 3],
                                           name='transposed')  # [batch, width, height, features]
@@ -184,18 +183,21 @@ class CRNN():
                                                                                  # sequence_length=sequence_length=batch_size*[n_steps]
                                                                                  sequence_length=self.rnnSeqLengths
                                                                                  )
-            with tf.variable_scope('Reshaping'):
+            with tf.variable_scope('Reshaping_rnn'):
                 shape = self.lstm_net.get_shape().as_list()  # [batch, width, 2*n_hidden]
-                reshaped = tf.reshape(self.lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
-                tf.contrib.layers.fully_connected(inputs=reshaped,
-                                                  # inputs=tf.reshape(outputs, (batch_size, np.prod(shape[1:]))),
-                                                  num_outputs=n_classes,
-                                                  # weights_initializer=tf.Variable(tf.truncated_normal([2*list_n_hidden[-1], n_classes])),
-                                                  # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
-                                                  trainable=True
-                                                  )
+                rnn_reshaped = tf.reshape(self.lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
 
-            return outputs
+            fc_out = tf.contrib.layers.fully_connected(inputs=rnn_reshaped,
+                                                       num_outputs=self.config.nClasses,
+                                                       activation_fn=None,
+                                                       trainable=True
+                                                       # weights_initializer=tf.Variable(tf.truncated_normal([2*list_n_hidden[-1], n_classes])),
+                                                       # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
+                                                       )  # [batch x width, n_classes]
+
+            pred = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses])  # [batch, width, n_classes]
+
+            return pred
 # ---------------------------------------------------------
 
 
@@ -206,7 +208,7 @@ def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
 
     with tf.variable_scope('Reshaping'):
         shape = conv.get_shape().as_list()  # [batch, height, width, features]
-        transposed = tf.transpose(conv, perm=[0, 2, 1, 3], name='transposed')  # [batch, width, height, features]
+        transposed = tf.transpose(conv, perm=[0, 2, 3, 1], name='transposed')  # [batch, width, features, height]
         conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]], name='reshaped')  # [batch, width, height x features]
 
     # Recurrent NN (BiLSTM)
