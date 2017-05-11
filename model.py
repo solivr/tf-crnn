@@ -93,6 +93,23 @@ def deep_cnn(input_tensor: tf.Tensor, resize_shape=[32, 32], name_scope='deep_cn
             net = tf.nn.relu(net, name='ReLU')
 
     return net
+# ---------------------------------------------------------
+
+
+def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
+    # Convolutional NN
+    conv = deep_cnn(input, resize_shape=cnn_input_shape)
+
+    with tf.variable_scope('Reshaping'):
+        shape = conv.get_shape().as_list()  # [batch, height, width, features]
+        transposed = tf.transpose(conv, perm=[0, 2, 3, 1], name='transposed')  # [batch, width, features, height]
+        conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]],
+                                   name='reshaped')  # [batch, width, height x features]
+
+    # Recurrent NN (BiLSTM)
+    output_rnn = deep_bidirectional_lstm(conv_reshaped, list_n_hidden=[256, 256])
+
+    return output_rnn
 # ----------------------------------------------------------
 
 
@@ -180,7 +197,6 @@ class CRNN():
                                                                                  bw_cell_list,
                                                                                  self.conv,
                                                                                  dtype=tf.float32,
-                                                                                 # sequence_length=sequence_length=batch_size*[n_steps]
                                                                                  sequence_length=self.rnnSeqLengths
                                                                                  )
             with tf.variable_scope('Reshaping_rnn'):
@@ -198,20 +214,3 @@ class CRNN():
             pred = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses])  # [batch, width, n_classes]
 
             return pred
-# ---------------------------------------------------------
-
-
-def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
-
-    # Convolutional NN
-    conv = deep_cnn(input, resize_shape=cnn_input_shape)
-
-    with tf.variable_scope('Reshaping'):
-        shape = conv.get_shape().as_list()  # [batch, height, width, features]
-        transposed = tf.transpose(conv, perm=[0, 2, 3, 1], name='transposed')  # [batch, width, features, height]
-        conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]], name='reshaped')  # [batch, width, height x features]
-
-    # Recurrent NN (BiLSTM)
-    output_rnn = deep_bidirectional_lstm(conv_reshaped, list_n_hidden=[256, 256])
-
-    return output_rnn
