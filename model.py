@@ -4,6 +4,7 @@ __author__ = 'solivr'
 from typing import Callable
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
+import warpctc_tensorflow
 
 
 class Model:
@@ -114,14 +115,14 @@ def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
 
 
 class CRNN():
-    def __init__(self, inputImgs, conf, isTraining: bool, rnnSeqLengths: list, session=None):
+    def __init__(self, inputImgs, conf, rnnSeqLengths: list, isTraining: bool, session=None):
         self.inputImgs = inputImgs
         self.sess = session
         self.config = conf
         self.isTraining = isTraining
         self.rnnSeqLengths = rnnSeqLengths
-        self.conv = deep_cnn()
-        self.prob = deep_bidirectional_lstm()
+        self.conv = self.deep_cnn()
+        self.prob = self.deep_bidirectional_lstm()
 
     def deep_cnn(self) -> tf.Tensor:
         if self.config.input_shape:
@@ -211,6 +212,27 @@ class CRNN():
                                                        # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
                                                        )  # [batch x width, n_classes]
 
-            pred = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses])  # [batch, width, n_classes]
+            lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses])  # [batch, width, n_classes]
 
-            return pred
+            self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2)
+
+            return lstm_out
+
+
+class CTC:
+    # def __init__(self, result, inputSeqLengths, lossTarget, targetSeqLengths, pred_labels, true_labels):
+    def __init__(self, result, inputSeqLengths, lossTarget):
+        self.result = result
+        self.inputSeqLengths = inputSeqLengths
+        self.lossTarget = lossTarget
+        # self.targetSeqLengths = targetSeqLengths
+        # self.pred_labels = pred_labels
+        # self.true_labels = true_labels
+        self.createCtcCriterion()
+
+    def createCtcCriterion(self):
+        # using built-in ctc loss calculator
+        self.loss = tf.nn.ctc_loss(self.lossTarget, self.result, self.inputSeqLengths)
+        # using baidu's warp ctc loss calculator
+        # self.loss = warpctc_tensorflow.ctc(self.result, self.lossTarget, self.targetSeqLengths, self.inputSeqLengths, blank_label=36)
+        self.cost = tf.reduce_mean(self.loss)
