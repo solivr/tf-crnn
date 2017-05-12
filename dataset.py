@@ -84,8 +84,12 @@ class Dataset:
         self.labels_string_list = format_mjsynth_txtfile(self.datapath, 'annotation_{}.txt'.format(self.mode))
 
     def nextBatch(self, batch_size):
-        paths_batch_list = self.img_paths_list[self.cursor:self.cursor+batch_size]
-        labels_batch_list = self.labels_string_list[self.cursor:self.cursor+batch_size]
+        try:
+            paths_batch_list = self.img_paths_list[self.cursor:self.cursor+batch_size]
+            labels_batch_list = self.labels_string_list[self.cursor:self.cursor+batch_size]
+        except IndexError:
+            paths_batch_list = self.img_paths_list[self.cursor:-1]
+            labels_batch_list = self.labels_string_list[self.cursor:-1]
 
         # Format labels to have a code per letter
         labels_1d, seqLengths = str2int_labels(labels_batch_list)
