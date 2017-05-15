@@ -2,6 +2,7 @@
 __author__ = 'solivr'
 
 import os
+import sys
 import numpy as np
 import cv2
 
@@ -78,10 +79,9 @@ class Dataset:
         self.imgC = config.imgC
         self.datapath = path
         self.mode = mode  # test, train, val
-        self.nSamples
+        self.nSamples = 0
         self.cursor = 0
-        self.img_paths_list,
-        self.labels_string_list = format_mjsynth_txtfile(self.datapath, 'annotation_{}.txt'.format(self.mode))
+        self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath, 'annotation_{}.txt'.format(self.mode))
 
     def nextBatch(self, batch_size):
         try:
@@ -98,9 +98,14 @@ class Dataset:
         # Open and preprocess images
         images = list()
         for p in paths_batch_list:
-            img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
-            resized = cv2.resize(img, (self.imgW, self.imgH))
-            images.append(resized)
+            img_path = os.path.abspath(os.path.join(self.datapath, p))
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            try:
+                resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
+                images.append(resized)
+            except:
+                sys.exit('Error with image reading, {}. Aborted.'.format(p))
+
 
         images = np.asarray(images)
         self.cursor += batch_size
