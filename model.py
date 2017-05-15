@@ -125,9 +125,9 @@ class CRNN():
         self.prob = self.deep_bidirectional_lstm()
 
     def deep_cnn(self) -> tf.Tensor:
-        if self.config.input_shape:
+        if self.config.inputShape:
             # resize image to have h x w
-            input_tensor = tf.image.resize_images(self.inputImgs, self.config.input_shape)
+            input_tensor = tf.image.resize_images(self.inputImgs, self.config.inputShape)
 
         # Following source code, not paper
 
@@ -190,9 +190,9 @@ class CRNN():
 
         with tf.name_scope('deep_bidirectional_lstm'):
             # Forward direction cells
-            fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in self.config.list_n_hidden]
+            fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in self.config.listNHidden]
             # Backward direction cells
-            bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in self.config.list_n_hidden]
+            bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in self.config.listNHidden]
 
             self.lstm_net, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
                                                                                  bw_cell_list,
