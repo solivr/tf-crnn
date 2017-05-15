@@ -142,7 +142,7 @@ class CRNN():
             net = tf.layers.conv2d(net, 128, (3, 3),
                                    strides=(1, 1), padding='same',
                                    activation=tf.nn.relu, name='conv2')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool2')
+            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), padding='same', name='pool2')
 
             # conv3 - w/batch-norm (as source code, not paper)
             with tf.variable_scope('conv3'):
@@ -154,7 +154,7 @@ class CRNN():
             # conv4 - maxPool 2x1
             net = tf.layers.conv2d(net, 256, (3, 3), strides=(1, 1), padding='same',
                                    activation=tf.nn.relu, name='conv4')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), name='pool4')
+            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), padding='same', name='pool4')
 
             # conv5 - w/batch-norm
             with tf.variable_scope('conv5'):
@@ -165,7 +165,7 @@ class CRNN():
             # conv6 - maxPool 2x1 (as source code, not paper)
             net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same',
                                    activation=tf.nn.relu, name='conv6')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), name='pool6')
+            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), padding='same', name='pool6')
 
             # conv 7 - w/batch-norm (as source code, not paper)
             with tf.variable_scope('conv7'):

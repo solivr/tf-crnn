@@ -34,9 +34,9 @@ def ascii2label(ascii):
     n_digits = 10
     if 48 <= ascii <= 57:  # 0-9
         c = ascii - 48
-    elif 65 <= ascii <= 90: # A-Z
+    elif 65 <= ascii <= 90:  # A-Z
         c = ascii - 65 + n_digits
-    elif 97 <= ascii <= 122: # a-z
+    elif 97 <= ascii <= 122:  # a-z
         c = ascii - 97 + n_digits
     return c
 # -------------------------------------------------
@@ -79,9 +79,9 @@ class Dataset:
         self.imgC = config.imgC
         self.datapath = path
         self.mode = mode  # test, train, val
-        self.nSamples = 0
         self.cursor = 0
         self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath, 'annotation_{}.txt'.format(self.mode))
+        self.nSamples = len(self.img_paths_list)
 
     def nextBatch(self, batch_size):
         try:
@@ -105,7 +105,6 @@ class Dataset:
                 images.append(resized)
             except:
                 sys.exit('Error with image reading, {}. Aborted.'.format(p))
-
 
         images = np.asarray(images)
         self.cursor += batch_size
