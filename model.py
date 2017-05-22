@@ -115,11 +115,12 @@ def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
 
 
 class CRNN():
-    def __init__(self, inputImgs, conf, rnnSeqLengths: list, isTraining: bool, session=None):
+    def __init__(self, inputImgs, conf, rnnSeqLengths: list, isTraining: bool, keep_prob: float, session=None):
         self.inputImgs = inputImgs
         self.sess = session
         self.config = conf
         self.isTraining = isTraining
+        self.keep_prob = keep_prob
         self.rnnSeqLengths = rnnSeqLengths
         self.conv = self.deep_cnn()
         self.prob = self.deep_bidirectional_lstm()
@@ -200,6 +201,10 @@ class CRNN():
                                                                                  dtype=tf.float32,
                                                                                  sequence_length=self.rnnSeqLengths
                                                                                  )
+
+            # Dropout layer
+            self.lstm_net = tf.nn.dropout(self.lstm_net, keep_prob=self.keep_prob)
+
             with tf.variable_scope('Reshaping_rnn'):
                 shape = self.lstm_net.get_shape().as_list()  # [batch, width, 2*n_hidden]
                 rnn_reshaped = tf.reshape(self.lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
@@ -212,9 +217,9 @@ class CRNN():
                                                        # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
                                                        )  # [batch x width, n_classes]
 
-            lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses])  # [batch, width, n_classes]
+            lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')  # [batch, width, n_classes]
 
-            self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2)
+            self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
 
             return lstm_out
 
