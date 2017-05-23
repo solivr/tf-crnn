@@ -62,13 +62,13 @@ def str2int_labels(labels_list):
             values.append(ascii2label(ord(labels_list[i][j])))
         seqLengths.append(length_word)
 
-    #dense_shape = [n_labels, maxLength]
-    #indices = np.asarray(indices, dtype=np.int32)
+    dense_shape = [n_labels, maxLength]
+    indices = np.asarray(indices, dtype=np.int32)
     values = np.asarray(values, dtype=np.int32)
-    #dense_shape = np.asarray(dense_shape, dtype=np.int32)
+    dense_shape = np.asarray(dense_shape, dtype=np.int32)
 
-    #return (indices, values, dense_shape), seqLengths
-    return values, seqLengths
+    # return Sparse Tensor
+    return (indices, values, dense_shape), seqLengths
 # -------------------------------------------------
 
 
@@ -84,6 +84,13 @@ class Dataset:
         self.nSamples = len(self.img_paths_list)
 
     def nextBatch(self, batch_size):
+        """
+
+        :param batch_size:
+        :return: image batch,
+                 label_set : tuple (sparse tensor, list string labels)
+                 seqLength : length of the sequence
+        """
         try:
             paths_batch_list = self.img_paths_list[self.cursor:self.cursor+batch_size]
             labels_batch_list = self.labels_string_list[self.cursor:self.cursor+batch_size]
