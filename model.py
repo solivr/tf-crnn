@@ -226,10 +226,10 @@ class CRNN():
 
 class CTC:
     # def __init__(self, result, inputSeqLengths, lossTarget, targetSeqLengths, pred_labels, true_labels):
-    def __init__(self, result, inputSeqLengths, lossTarget):
+    def __init__(self, result, target, targetSeqLengths):
         self.result = result
-        self.inputSeqLengths = inputSeqLengths
-        self.lossTarget = lossTarget
+        self.targetSeqLengths = targetSeqLengths
+        self.target = target
         # self.targetSeqLengths = targetSeqLengths
         # self.pred_labels = pred_labels
         # self.true_labels = true_labels
@@ -237,7 +237,7 @@ class CTC:
 
     def createCtcCriterion(self):
         # using built-in ctc loss calculator
-        self.loss = tf.nn.ctc_loss(self.lossTarget, self.result, self.inputSeqLengths)
+        self.loss = tf.nn.ctc_loss(self.target, self.result, self.targetSeqLengths, time_major=False)
         # using baidu's warp ctc loss calculator
         # self.loss = warpctc_tensorflow.ctc(self.result, self.lossTarget, self.targetSeqLengths, self.inputSeqLengths, blank_label=36)
         self.cost = tf.reduce_mean(self.loss)
