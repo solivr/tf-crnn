@@ -4,6 +4,7 @@ __author__ = 'solivr'
 from typing import Callable
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
+import os
 import warpctc_tensorflow
 
 
@@ -20,97 +21,97 @@ class Model:
 # ----------------------------------------------------------
 
 
-def deep_bidirectional_lstm(input_tensor: tf.Tensor, list_n_hidden=[256, 256], seq_len=None,
-                            name_scope='deep_bidirectional_lstm') -> tf.Tensor:
-    # Prepare data shape to match `bidirectional_rnn` function requirements
-    # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
-
-    with tf.name_scope(name_scope):
-        # Forward direction cells
-        fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
-        # Backward direction cells
-        bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
-
-        outputs, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
-                                                                       bw_cell_list,
-                                                                       input_tensor,
-                                                                       dtype=tf.float32,
-                                                                       # sequence_length=sequence_length=batch_size*[n_steps]
-                                                                       sequence_length=seq_len
-                                                                       )
-
-        return outputs
+# def deep_bidirectional_lstm(input_tensor: tf.Tensor, list_n_hidden=[256, 256], seq_len=None,
+#                             name_scope='deep_bidirectional_lstm') -> tf.Tensor:
+#     # Prepare data shape to match `bidirectional_rnn` function requirements
+#     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
+#
+#     with tf.name_scope(name_scope):
+#         # Forward direction cells
+#         fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
+#         # Backward direction cells
+#         bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
+#
+#         outputs, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
+#                                                                        bw_cell_list,
+#                                                                        input_tensor,
+#                                                                        dtype=tf.float32,
+#                                                                        # sequence_length=sequence_length=batch_size*[n_steps]
+#                                                                        sequence_length=seq_len
+#                                                                        )
+#
+#         return outputs
 # ----------------------------------------------------------
 
 
-def deep_cnn(input_tensor: tf.Tensor, resize_shape=[32, 32], name_scope='deep_cnn'):
-
-    if resize_shape:
-        # resize image to have h x w
-        input_tensor = tf.image.resize_images(input_tensor, resize_shape)
-
-    # Following source code, not paper
-
-    with tf.variable_scope(name_scope):
-        # conv1 - maxPool2x2
-        net = tf.layers.conv2d(input_tensor, 64, (3, 3),
-                               strides=(1, 1), padding='same',
-                               activation=tf.nn.relu, name='conv1')
-        net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool1')
-
-        # conv2 - maxPool 2x2
-        net = tf.layers.conv2d(net, 128, (3, 3),
-                               strides=(1, 1), padding='same',
-                               activation=tf.nn.relu, name='conv2')
-        net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool2')
-
-        # conv3 - w/batch-norm (as source code, not paper)
-        with tf.variable_scope('conv3'):
-            net = tf.layers.conv2d(net, 256, (3, 3),
-                                   strides=(1, 1), padding='same')
-            net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-            net = tf.nn.relu(net, name='ReLU')
-
-        # conv4 - maxPool 2x1
-        net = tf.layers.conv2d(net, 256, (3, 3), strides=(1, 1), padding='same',
-                               activation=tf.nn.relu, name='conv4')
-        net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), name='pool4')
-
-        # conv5 - w/batch-norm
-        with tf.variable_scope('conv5'):
-            net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same')
-            net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-            net = tf.nn.relu(net, name='ReLU')
-
-        # conv6 - maxPool 2x1 (as source code, not paper)
-        net = tf.layers.conv2d(net, 512, (3, 3), strides=(1,1), padding='same',
-                               activation=tf.nn.relu, name='conv6')
-        net = tf.layers.max_pooling2d(net, (2,2), strides=(2,1), name='pool6')
-
-        # conv 7 - w/batch-norm (as source code, not paper)
-        with tf.variable_scope('conv7'):
-            net = tf.layers.conv2d(net, 512, (2, 2), strides=(1, 1), padding='valid')
-            net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-            net = tf.nn.relu(net, name='ReLU')
-
-    return net
+# def deep_cnn(input_tensor: tf.Tensor, resize_shape=[32, 32], name_scope='deep_cnn'):
+#
+#     if resize_shape:
+#         # resize image to have h x w
+#         input_tensor = tf.image.resize_images(input_tensor, resize_shape)
+#
+#     # Following source code, not paper
+#
+#     with tf.variable_scope(name_scope):
+#         # conv1 - maxPool2x2
+#         net = tf.layers.conv2d(input_tensor, 64, (3, 3),
+#                                strides=(1, 1), padding='same',
+#                                activation=tf.nn.relu, name='conv1')
+#         net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool1')
+#
+#         # conv2 - maxPool 2x2
+#         net = tf.layers.conv2d(net, 128, (3, 3),
+#                                strides=(1, 1), padding='same',
+#                                activation=tf.nn.relu, name='conv2')
+#         net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool2')
+#
+#         # conv3 - w/batch-norm (as source code, not paper)
+#         with tf.variable_scope('conv3'):
+#             net = tf.layers.conv2d(net, 256, (3, 3),
+#                                    strides=(1, 1), padding='same')
+#             net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
+#             net = tf.nn.relu(net, name='ReLU')
+#
+#         # conv4 - maxPool 2x1
+#         net = tf.layers.conv2d(net, 256, (3, 3), strides=(1, 1), padding='same',
+#                                activation=tf.nn.relu, name='conv4')
+#         net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), name='pool4')
+#
+#         # conv5 - w/batch-norm
+#         with tf.variable_scope('conv5'):
+#             net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same')
+#             net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
+#             net = tf.nn.relu(net, name='ReLU')
+#
+#         # conv6 - maxPool 2x1 (as source code, not paper)
+#         net = tf.layers.conv2d(net, 512, (3, 3), strides=(1,1), padding='same',
+#                                activation=tf.nn.relu, name='conv6')
+#         net = tf.layers.max_pooling2d(net, (2,2), strides=(2,1), name='pool6')
+#
+#         # conv 7 - w/batch-norm (as source code, not paper)
+#         with tf.variable_scope('conv7'):
+#             net = tf.layers.conv2d(net, 512, (2, 2), strides=(1, 1), padding='valid')
+#             net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
+#             net = tf.nn.relu(net, name='ReLU')
+#
+#     return net
 # ---------------------------------------------------------
 
 
-def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
-    # Convolutional NN
-    conv = deep_cnn(input, resize_shape=cnn_input_shape)
-
-    with tf.variable_scope('Reshaping'):
-        shape = conv.get_shape().as_list()  # [batch, height, width, features]
-        transposed = tf.transpose(conv, perm=[0, 2, 3, 1], name='transposed')  # [batch, width, features, height]
-        conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]],
-                                   name='reshaped')  # [batch, width, height x features]
-
-    # Recurrent NN (BiLSTM)
-    output_rnn = deep_bidirectional_lstm(conv_reshaped, list_n_hidden=[256, 256])
-
-    return output_rnn
+# def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
+#     # Convolutional NN
+#     conv = deep_cnn(input, resize_shape=cnn_input_shape)
+#
+#     with tf.variable_scope('Reshaping'):
+#         shape = conv.get_shape().as_list()  # [batch, height, width, features]
+#         transposed = tf.transpose(conv, perm=[0, 2, 3, 1], name='transposed')  # [batch, width, features, height]
+#         conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]],
+#                                    name='reshaped')  # [batch, width, height x features]
+#
+#     # Recurrent NN (BiLSTM)
+#     output_rnn = deep_bidirectional_lstm(conv_reshaped, list_n_hidden=[256, 256])
+#
+#     return output_rnn
 # ----------------------------------------------------------
 
 
@@ -222,6 +223,23 @@ class CRNN():
             self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
 
             return lstm_out
+
+    def saveModel(self, model_dir, step):
+        save_path = os.path.join(model_dir, 'chkpt-{}'.format(step))
+        saver = tf.train.Saver()
+
+        if not os.path.isdir(save_path):
+            os.mkdir(save_path)
+
+        p = saver.save(self.sess, os.path.join(save_path, 'ckpt-%{}'.format(step)))
+        print('Model saved at: {}'.format(p))
+        return p
+
+    def loadModel(self, file):
+        saver = tf.train.Saver()
+        saver.restore(self.sess, file)
+        print('Model restored')
+
 
 
 class CTC:
