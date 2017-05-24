@@ -80,6 +80,7 @@ class Dataset:
         self.datapath = path
         self.mode = mode  # test, train, val
         self.cursor = 0
+        self.reset = False
         self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath, 'annotation_{}.txt'.format(self.mode))
         self.nSamples = len(self.img_paths_list)
 
@@ -97,6 +98,7 @@ class Dataset:
         except IndexError:
             paths_batch_list = self.img_paths_list[self.cursor:-1]
             labels_batch_list = self.labels_string_list[self.cursor:-1]
+            self.reset = True
 
         # Format labels to have a code per letter
         labels_1d, seqLengths = str2int_labels(labels_batch_list)
@@ -115,5 +117,9 @@ class Dataset:
 
         images = np.asarray(images)
         self.cursor += batch_size
+
+        if self.reset:
+            self.cursor = 0
+            self.reset = False
 
         return images, label_set, seqLengths
