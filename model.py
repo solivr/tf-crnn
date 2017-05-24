@@ -130,6 +130,7 @@ class CRNN():
         if self.config.inputShape:
             # resize image to have h x w
             input_tensor = tf.image.resize_images(self.inputImgs, self.config.inputShape)
+            tf.summary.image('input_image', input_tensor, 1)
 
         # Following source code, not paper
 
@@ -139,6 +140,8 @@ class CRNN():
                                    strides=(1, 1), padding='same',
                                    activation=tf.nn.relu, name='conv1')
             net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool1')
+
+            tf.summary.image('conv1_1st_sample', net[:, :, :, :1], 1)
 
             # conv2 - maxPool 2x2
             net = tf.layers.conv2d(net, 128, (3, 3),
@@ -221,6 +224,10 @@ class CRNN():
             lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')  # [batch, width, n_classes]
 
             self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
+            tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
+
+            # Swap batch and time axis
+            lstm_out = tf.transpose(lstm_out, [1, 0, 2], name='transpose_time_major')  # [width(time), batch, n_classes]
 
             return lstm_out
 
@@ -244,18 +251,21 @@ class CRNN():
 
 class CTC:
     # def __init__(self, result, inputSeqLengths, lossTarget, targetSeqLengths, pred_labels, true_labels):
-    def __init__(self, result, target, targetSeqLengths):
+    def __init__(self, result, target, targetSeqLengths : list, inputSeqLentgh=None ):
         self.result = result
         self.targetSeqLengths = targetSeqLengths
         self.target = target
-        # self.targetSeqLengths = targetSeqLengths
+        self.inputSeqLentgh = inputSeqLentgh
         # self.pred_labels = pred_labels
         # self.true_labels = true_labels
         self.createCtcCriterion()
 
     def createCtcCriterion(self):
         # using built-in ctc loss calculator
-        self.loss = tf.nn.ctc_loss(self.target, self.result, self.targetSeqLengths, time_major=False)
+        self.loss = tf.nn.ctc_loss(self.target, self.result, self.targetSeqLengths, time_major=True)
         # using baidu's warp ctc loss calculator
-        # self.loss = warpctc_tensorflow.ctc(self.result, self.lossTarget, self.targetSeqLengths, self.inputSeqLengths, blank_label=36)
+        self.loss_warp = warpctc_tensorflow.ctc(activations=self.result, flat_labels=self.target,
+                                                label_lengths=self.targetSeqLengths, input_lengths=self.inputSeqLengths,
+                                                blank_label=36)
         self.cost = tf.reduce_mean(self.loss)
+        self.cost_warp = tf.reduce_mean(self.loss_warp)
