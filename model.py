@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
 import os
 import warpctc_tensorflow
-
+import numpy as np
 
 class Model:
 
@@ -135,48 +135,84 @@ class CRNN():
         # Following source code, not paper
 
         with tf.variable_scope('deep_cnn'):
-            # conv1 - maxPool2x2
+            # - conv1 - maxPool2x2
             net = tf.layers.conv2d(input_tensor, 64, (3, 3),
+                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                               size=(3, 3, 1, 64))),
                                    strides=(1, 1), padding='same',
                                    activation=tf.nn.relu, name='conv1')
             net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool1')
 
             tf.summary.image('conv1_1st_sample', net[:, :, :, :1], 1)
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv1/kernel:0'][0]
+            tf.summary.histogram('conv1_weights', weights)
 
-            # conv2 - maxPool 2x2
+            # - conv2 - maxPool 2x2
             net = tf.layers.conv2d(net, 128, (3, 3),
                                    strides=(1, 1), padding='same',
+                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                               size=(3, 3, 64, 128))),
                                    activation=tf.nn.relu, name='conv2')
             net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), padding='same', name='pool2')
 
-            # conv3 - w/batch-norm (as source code, not paper)
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv2/kernel:0'][0]
+            tf.summary.histogram('conv2_weights', weights)
+
+            # - conv3 - w/batch-norm (as source code, not paper)
             with tf.variable_scope('conv3'):
                 net = tf.layers.conv2d(net, 256, (3, 3),
+                                       kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                                   size=(3, 3, 1, 256))),
                                        strides=(1, 1), padding='same')
                 net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
                 net = tf.nn.relu(net, name='ReLU')
 
-            # conv4 - maxPool 2x1
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv3/conv2d/kernel:0'][0]
+            tf.summary.histogram('conv3_weights', weights)
+
+            # - conv4 - maxPool 2x1
             net = tf.layers.conv2d(net, 256, (3, 3), strides=(1, 1), padding='same',
+                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                               size=(3, 3, 1, 256))),
                                    activation=tf.nn.relu, name='conv4')
             net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), padding='same', name='pool4')
 
-            # conv5 - w/batch-norm
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv4/kernel:0'][0]
+            tf.summary.histogram('conv4_weights', weights)
+
+            # - conv5 - w/batch-norm
             with tf.variable_scope('conv5'):
-                net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same')
+                net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1),
+                                       kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                                   size=(3, 3, 1, 512))),
+                                       padding='same')
                 net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
                 net = tf.nn.relu(net, name='ReLU')
 
-            # conv6 - maxPool 2x1 (as source code, not paper)
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv5/conv2d/kernel:0'][0]
+            tf.summary.histogram('conv5_weights', weights)
+
+            # - conv6 - maxPool 2x1 (as source code, not paper)
             net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same',
+                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                               size=(3, 3, 1, 512))),
                                    activation=tf.nn.relu, name='conv6')
             net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), padding='same', name='pool6')
 
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv6/kernel:0'][0]
+            tf.summary.histogram('conv6_weights', weights)
+
             # conv 7 - w/batch-norm (as source code, not paper)
             with tf.variable_scope('conv7'):
-                net = tf.layers.conv2d(net, 512, (2, 2), strides=(1, 1), padding='valid')
+                net = tf.layers.conv2d(net, 512, (2, 2), strides=(1, 1),
+                                       kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
+                                                                                                   size=(2, 2, 1, 512))),
+                                       padding='valid')
                 net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
                 net = tf.nn.relu(net, name='ReLU')
+
+            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv7/conv2d/kernel:0'][0]
+            tf.summary.histogram('conv7_weights', weights)
 
             self.cnn_net = net
 
