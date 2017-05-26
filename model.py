@@ -8,6 +8,7 @@ import os
 import warpctc_tensorflow
 import numpy as np
 
+
 class Model:
 
     def __init__(self, name: str, function: Callable, pretrained_file=None, trainable=False):
@@ -21,98 +22,18 @@ class Model:
 # ----------------------------------------------------------
 
 
-# def deep_bidirectional_lstm(input_tensor: tf.Tensor, list_n_hidden=[256, 256], seq_len=None,
-#                             name_scope='deep_bidirectional_lstm') -> tf.Tensor:
-#     # Prepare data shape to match `bidirectional_rnn` function requirements
-#     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
-#
-#     with tf.name_scope(name_scope):
-#         # Forward direction cells
-#         fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
-#         # Backward direction cells
-#         bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
-#
-#         outputs, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
-#                                                                        bw_cell_list,
-#                                                                        input_tensor,
-#                                                                        dtype=tf.float32,
-#                                                                        # sequence_length=sequence_length=batch_size*[n_steps]
-#                                                                        sequence_length=seq_len
-#                                                                        )
-#
-#         return outputs
-# ----------------------------------------------------------
+def weightVar(shape, mean=0.0, stddev=0.1, name='weights'):
+    initW = tf.truncated_normal(shape=shape, mean=mean, stddev=stddev)
+    return tf.Variable(initW, name=name)
 
 
-# def deep_cnn(input_tensor: tf.Tensor, resize_shape=[32, 32], name_scope='deep_cnn'):
-#
-#     if resize_shape:
-#         # resize image to have h x w
-#         input_tensor = tf.image.resize_images(input_tensor, resize_shape)
-#
-#     # Following source code, not paper
-#
-#     with tf.variable_scope(name_scope):
-#         # conv1 - maxPool2x2
-#         net = tf.layers.conv2d(input_tensor, 64, (3, 3),
-#                                strides=(1, 1), padding='same',
-#                                activation=tf.nn.relu, name='conv1')
-#         net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool1')
-#
-#         # conv2 - maxPool 2x2
-#         net = tf.layers.conv2d(net, 128, (3, 3),
-#                                strides=(1, 1), padding='same',
-#                                activation=tf.nn.relu, name='conv2')
-#         net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool2')
-#
-#         # conv3 - w/batch-norm (as source code, not paper)
-#         with tf.variable_scope('conv3'):
-#             net = tf.layers.conv2d(net, 256, (3, 3),
-#                                    strides=(1, 1), padding='same')
-#             net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-#             net = tf.nn.relu(net, name='ReLU')
-#
-#         # conv4 - maxPool 2x1
-#         net = tf.layers.conv2d(net, 256, (3, 3), strides=(1, 1), padding='same',
-#                                activation=tf.nn.relu, name='conv4')
-#         net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), name='pool4')
-#
-#         # conv5 - w/batch-norm
-#         with tf.variable_scope('conv5'):
-#             net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same')
-#             net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-#             net = tf.nn.relu(net, name='ReLU')
-#
-#         # conv6 - maxPool 2x1 (as source code, not paper)
-#         net = tf.layers.conv2d(net, 512, (3, 3), strides=(1,1), padding='same',
-#                                activation=tf.nn.relu, name='conv6')
-#         net = tf.layers.max_pooling2d(net, (2,2), strides=(2,1), name='pool6')
-#
-#         # conv 7 - w/batch-norm (as source code, not paper)
-#         with tf.variable_scope('conv7'):
-#             net = tf.layers.conv2d(net, 512, (2, 2), strides=(1, 1), padding='valid')
-#             net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-#             net = tf.nn.relu(net, name='ReLU')
-#
-#     return net
-# ---------------------------------------------------------
+def biasVar(shape, value=0.0, name='bias'):
+    initb = tf.constant(value=value, shape=shape)
+    return tf.Variable(initb, name=name)
 
 
-# def crnn(input: tf.Tensor, cnn_input_shape=[32, 100]):
-#     # Convolutional NN
-#     conv = deep_cnn(input, resize_shape=cnn_input_shape)
-#
-#     with tf.variable_scope('Reshaping'):
-#         shape = conv.get_shape().as_list()  # [batch, height, width, features]
-#         transposed = tf.transpose(conv, perm=[0, 2, 3, 1], name='transposed')  # [batch, width, features, height]
-#         conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]],
-#                                    name='reshaped')  # [batch, width, height x features]
-#
-#     # Recurrent NN (BiLSTM)
-#     output_rnn = deep_bidirectional_lstm(conv_reshaped, list_n_hidden=[256, 256])
-#
-#     return output_rnn
-# ----------------------------------------------------------
+def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
+    return tf.nn.conv2d(input, filter, strides=strides, padding=padding, name=name)
 
 
 class CRNN():
@@ -135,86 +56,114 @@ class CRNN():
         # Following source code, not paper
 
         with tf.variable_scope('deep_cnn'):
-            # - conv1 - maxPool2x2
-            net = tf.layers.conv2d(input_tensor, 64, (3, 3),
-                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                               size=(3, 3, 1, 64))),
-                                   strides=(1, 1), padding='same',
-                                   activation=tf.nn.relu, name='conv1')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), name='pool1')
 
-            tf.summary.image('conv1_1st_sample', net[:, :, :, :1], 1)
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv1/kernel:0'][0]
-            tf.summary.histogram('conv1_weights', weights)
+            # - conv1 - maxPool2x2
+            with tf.variable_scope('layer1'):
+                W = weightVar([3, 3, 1, 64])
+                b = biasVar([64])
+                conv = conv2d(input_tensor, W, name='conv')
+                out = tf.nn.bias_add(conv, b)
+                conv1 = tf.nn.relu(out)
+                pool1 = tf.nn.max_pool(conv1, [1, 2, 2, 1], strides=[1, 2, 2, 1],
+                                        padding='SAME', name='pool')
+
+                tf.summary.image('conv1_1st_sample', pool1[:, :, :, :1], 1)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
             # - conv2 - maxPool 2x2
-            net = tf.layers.conv2d(net, 128, (3, 3),
-                                   strides=(1, 1), padding='same',
-                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                               size=(3, 3, 64, 128))),
-                                   activation=tf.nn.relu, name='conv2')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 2), padding='same', name='pool2')
+            with tf.variable_scope('layer2'):
+                W = weightVar([3, 3, 64, 128])
+                b = biasVar([128])
+                conv = conv2d(pool1, W)
+                out = tf.nn.bias_add(conv, b)
+                conv2 = tf.nn.relu(out)
+                pool2 = tf.nn.max_pool(conv2, [1, 2, 2, 1], strides=[1, 2, 2, 1],
+                                       padding='SAME', name='pool1')
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv2/kernel:0'][0]
-            tf.summary.histogram('conv2_weights', weights)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
             # - conv3 - w/batch-norm (as source code, not paper)
-            with tf.variable_scope('conv3'):
-                net = tf.layers.conv2d(net, 256, (3, 3),
-                                       kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                                   size=(3, 3, 1, 256))),
-                                       strides=(1, 1), padding='same')
-                net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-                net = tf.nn.relu(net, name='ReLU')
+            with tf.variable_scope('layer3'):
+                W = weightVar([3, 3, 128, 256])
+                b = biasVar([256])
+                conv = conv2d(pool2, W)
+                out = tf.nn.bias_add(conv, b)
+                b_norm = tf.layers.batch_normalization(out, axis=-1,
+                                                       training=self.isTraining, name='batch-norm')
+                conv3 = tf.nn.relu(b_norm, name='ReLU')
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv3/conv2d/kernel:0'][0]
-            tf.summary.histogram('conv3_weights', weights)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
             # - conv4 - maxPool 2x1
-            net = tf.layers.conv2d(net, 256, (3, 3), strides=(1, 1), padding='same',
-                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                               size=(3, 3, 1, 256))),
-                                   activation=tf.nn.relu, name='conv4')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), padding='same', name='pool4')
+            with tf.variable_scope('layer4'):
+                W = weightVar([3, 3, 256, 256])
+                b = biasVar([256])
+                conv = conv2d(conv3, W)
+                out = tf.nn.bias_add(conv, b)
+                conv4 = tf.nn.relu(out)
+                pool4 = tf.nn.max_pool(conv4, [1, 2, 2, 1], strides=[1, 2, 1, 1],
+                                       padding='SAME', name='pool4')
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv4/kernel:0'][0]
-            tf.summary.histogram('conv4_weights', weights)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
             # - conv5 - w/batch-norm
-            with tf.variable_scope('conv5'):
-                net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1),
-                                       kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                                   size=(3, 3, 1, 512))),
-                                       padding='same')
-                net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-                net = tf.nn.relu(net, name='ReLU')
+            with tf.variable_scope('layer5'):
+                W = weightVar([3, 3, 256, 512])
+                b = biasVar([512])
+                conv = conv2d(pool4, W)
+                out = tf.nn.bias_add(conv, b)
+                b_norm = tf.layers.batch_normalization(out, axis=-1,
+                                                       training=self.isTraining, name='batch-norm')
+                conv5 = tf.nn.relu(b_norm)
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv5/conv2d/kernel:0'][0]
-            tf.summary.histogram('conv5_weights', weights)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
             # - conv6 - maxPool 2x1 (as source code, not paper)
-            net = tf.layers.conv2d(net, 512, (3, 3), strides=(1, 1), padding='same',
-                                   kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                               size=(3, 3, 1, 512))),
-                                   activation=tf.nn.relu, name='conv6')
-            net = tf.layers.max_pooling2d(net, (2, 2), strides=(2, 1), padding='same', name='pool6')
+            with tf.variable_scope('layer6'):
+                W = weightVar([3, 3, 512, 512])
+                b = biasVar([512])
+                conv = conv2d(conv5, W)
+                out = tf.nn.bias_add(conv, b)
+                conv6 = tf.nn.relu(out)
+                pool6 = tf.nn.max_pool(conv6, [1, 2, 2, 1], strides=[1, 2, 1, 1],
+                                       padding='SAME', name='pool6')
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv6/kernel:0'][0]
-            tf.summary.histogram('conv6_weights', weights)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
             # conv 7 - w/batch-norm (as source code, not paper)
-            with tf.variable_scope('conv7'):
-                net = tf.layers.conv2d(net, 512, (2, 2), strides=(1, 1),
-                                       kernel_initializer=tf.constant_initializer(np.random.normal(loc=0.0, scale=0.1,
-                                                                                                   size=(2, 2, 1, 512))),
-                                       padding='valid')
-                net = tf.layers.batch_normalization(net, axis=-1, name='batch-norm')
-                net = tf.nn.relu(net, name='ReLU')
+            with tf.variable_scope('layer7'):
+                W = weightVar([2, 2, 512, 512])
+                b = biasVar([512])
+                conv = conv2d(pool6, W, padding='VALID')
+                out = tf.nn.bias_add(conv, b)
+                b_norm = tf.layers.batch_normalization(out, axis=-1,
+                                                       training=self.isTraining, name='batch-norm')
+                conv7 = tf.nn.relu(b_norm)
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/conv7/conv2d/kernel:0'][0]
-            tf.summary.histogram('conv7_weights', weights)
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
-            self.cnn_net = net
+            self.cnn_net = conv7
 
             with tf.variable_scope('Reshaping_cnn'):
                 shape = self.cnn_net.get_shape().as_list()  # [batch, height, width, features]
@@ -249,13 +198,25 @@ class CRNN():
                 shape = self.lstm_net.get_shape().as_list()  # [batch, width, 2*n_hidden]
                 rnn_reshaped = tf.reshape(self.lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
 
-            fc_out = tf.contrib.layers.fully_connected(inputs=rnn_reshaped,
-                                                       num_outputs=self.config.nClasses,
-                                                       activation_fn=None,
-                                                       trainable=True
-                                                       # weights_initializer=tf.Variable(tf.truncated_normal([2*list_n_hidden[-1], n_classes])),
-                                                       # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
-                                                       )  # [batch x width, n_classes]
+            with tf.variable_scope('fully_connected'):
+                W = weightVar([self.config.listNHidden[-1]*2, self.config.nClasses])
+                b = biasVar([self.config.nClasses])
+                fc_out = tf.nn.bias_add(tf.matmul(rnn_reshaped, W), b)
+
+                weights = [var for var in tf.global_variables()
+                           if var.name == 'deep_bidirectional_lstm/fully_connected/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables()
+                        if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
+                tf.summary.histogram('bias', bias)
+
+            # fc_out = tf.contrib.layers.fully_connected(inputs=rnn_reshaped,
+            #                                            num_outputs=self.config.nClasses,
+            #                                            activation_fn=None,
+            #                                            trainable=True
+            #                                            # weights_initializer=tf.Variable(tf.truncated_normal([2*list_n_hidden[-1], n_classes])),
+            #                                            # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
+            #                                            )  # [batch x width, n_classes]
 
             lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')  # [batch, width, n_classes]
 
