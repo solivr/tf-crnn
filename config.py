@@ -4,7 +4,7 @@ __author__ = 'solivr'
 
 class Conf:
     def __init__(self, n_classes=None, train_batch_size=100, learning_rate=0.001, test_batch_size=200, max_iteration=10000,
-                 display_interval=200, test_interval=100, model_file=None, data_set='../data', max_len=28,
+                 display_interval=200, test_interval=100, save_interval=1000, file_writer=None, model_dir=None, data_set='../data', max_len=28,
                  input_shape=[32, 100], list_n_hidden=[256, 256], summary_dir='./graph'):
         self.nClasses = n_classes
         self.trainBatchSize = train_batch_size
@@ -13,7 +13,9 @@ class Conf:
         self.maxIteration = max_iteration
         self.displayInterval = display_interval
         self.testInterval = test_interval
-        self.modelParFile = model_file
+        self.saveInterval = save_interval
+        self.fileWriter = file_writer
+        self.modelDir = model_dir
         self.dataSet = data_set
         self.maxLength = max_len
         self.inputShape = input_shape

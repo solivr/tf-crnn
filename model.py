@@ -232,13 +232,16 @@ class CRNN():
             return lstm_out
 
     def saveModel(self, model_dir, step):
+        if not os.path.isdir(model_dir):
+            os.mkdir(model_dir)
+
         save_path = os.path.join(model_dir, 'chkpt-{}'.format(step))
         saver = tf.train.Saver()
 
         if not os.path.isdir(save_path):
             os.mkdir(save_path)
 
-        p = saver.save(self.sess, os.path.join(save_path, 'ckpt-%{}'.format(step)))
+        p = saver.save(self.sess, os.path.join(save_path, 'ckpt-{}'.format(step)))
         print('Model saved at: {}'.format(p))
         return p
 
