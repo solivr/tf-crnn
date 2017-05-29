@@ -67,7 +67,7 @@ class CRNN():
                 pool1 = tf.nn.max_pool(conv1, [1, 2, 2, 1], strides=[1, 2, 2, 1],
                                         padding='SAME', name='pool')
 
-                tf.summary.image('conv1_1st_sample', pool1[:, :, :, :1], 1)
+                tf.summary.image('1st_sample', pool1[:, :, :, :1], 1)
                 weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/weights:0'][0]
                 tf.summary.histogram('weights', weights)
                 bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/bias:0'][0]
@@ -83,6 +83,7 @@ class CRNN():
                 pool2 = tf.nn.max_pool(conv2, [1, 2, 2, 1], strides=[1, 2, 2, 1],
                                        padding='SAME', name='pool1')
 
+                tf.summary.image('1st_sample', pool2[:, :, :, :1], 1)
                 weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/weights:0'][0]
                 tf.summary.histogram('weights', weights)
                 bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/bias:0'][0]
@@ -113,6 +114,7 @@ class CRNN():
                 pool4 = tf.nn.max_pool(conv4, [1, 2, 2, 1], strides=[1, 2, 1, 1],
                                        padding='SAME', name='pool4')
 
+                tf.summary.image('1st_sample', pool4[:, :, :, :1], 1)
                 weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/weights:0'][0]
                 tf.summary.histogram('weights', weights)
                 bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/bias:0'][0]
