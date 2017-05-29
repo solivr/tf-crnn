@@ -5,6 +5,7 @@ import os
 import sys
 import numpy as np
 import cv2
+from tqdm import tqdm
 
 
 def format_mjsynth_txtfile(path, file_split):
@@ -131,12 +132,12 @@ class Dataset:
         Loads all images of the dataset and removes the ones that rise errors
         :return:
         """
-
-        for p, l in zip(self.img_paths_list, self.labels_string_list):
+        print('Checking validity of dataset')
+        for p, l in tqdm(zip(self.img_paths_list, self.labels_string_list), total=len(self.img_paths_list)):
             img_path = os.path.abspath(os.path.join(self.datapath, p))
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
             if img is None:
-                print('Error with image {}, removing it from dataset.'.format(p))
+                print('Error with image {} : removing from dataset.'.format(p))
                 self.img_paths_list.remove(p)
                 self.labels_string_list.remove(l)
 
