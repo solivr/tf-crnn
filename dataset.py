@@ -81,7 +81,9 @@ class Dataset:
         self.mode = mode  # test, train, val
         self.cursor = 0
         self.reset = False
-        self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath, 'annotation_{}.txt'.format(self.mode))
+        self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath,
+                                                                              'annotation_{}.txt'.format(self.mode))
+        self.check_validity_img()
         self.nSamples = len(self.img_paths_list)
 
     def nextBatch(self, batch_size):
@@ -123,3 +125,18 @@ class Dataset:
             self.reset = False
 
         return images, label_set, seqLengths
+
+    def check_validity_img(self):
+        """
+        Loads all images of the dataset and removes the ones that rise errors
+        :return:
+        """
+
+        for p, l in zip(self.img_paths_list, self.labels_string_list):
+            img_path = os.path.abspath(os.path.join(self.datapath, p))
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            if img is None:
+                print('Error with image {}, removing it from dataset.'.format(p))
+                self.img_paths_list.remove(p)
+                self.labels_string_list.remove(l)
+
