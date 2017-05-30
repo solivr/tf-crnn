@@ -201,6 +201,11 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
 
 
 def crnn_fn(features, targets, mode, params):
+    if mode == 'train':
+        isTraining = True
+    else:
+        isTraining = False
+
     conv = deep_cnn(features, isTraining, params)  # params : input_shape
     prob, raw_pred = deep_bidirectional_lstm(conv, params)  # params: rnn_seq_length, keep_prob
     predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
@@ -208,18 +213,18 @@ def crnn_fn(features, targets, mode, params):
     # Loss
     loss_ctc = warpctc_tensorflow.ctc(activations=prob,
                                       flat_labels=targets,
-                                      label_lengths=params['targetSeqLengths'],
+                                      label_lengths=params['rnn_seq_length'],
                                       input_lengths=params['inputSeqLength'],
                                       blank_label=36)
 
-    # Computing WER
-    str_pred_orginal = params['str_labels']
-    str_pred_blank = simpleDecoderWithBlank(raw_pred)
-    str_pred = simpleDecoder(raw_pred)
-
-    eval_metric_ops = {
-        'WER': eval_accuracy(str_pred, str_pred_orginal)
-    }
+    # # Computing WER
+    # str_pred_orginal = params['str_labels']
+    # str_pred_blank = simpleDecoderWithBlank(raw_pred)
+    # str_pred = simpleDecoder(raw_pred)
+    #
+    # eval_metric_ops = {
+    #     'WER': eval_accuracy(str_pred, str_pred_orginal)
+    # }
 
     global_step = tf.Variable(0)
     train_op = tf.train.RMSPropOptimizer(params['learning_rate']).minimize(loss_ctc, global_step=global_step)
@@ -229,7 +234,8 @@ def crnn_fn(features, targets, mode, params):
         predictions=predictions_dict,
         loss=loss_ctc,
         train_op=train_op,
-        eval_metric_ops=eval_metric_ops)
+        # eval_metric_ops=eval_metric_ops
+    )
 
 
 # # MODEL FUNCTION
