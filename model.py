@@ -244,10 +244,11 @@ class CRNN():
 
 class CTC:
     # def __init__(self, result, inputSeqLengths, lossTarget, targetSeqLengths, pred_labels, true_labels):
-    def __init__(self, result: tf.Tensor, target, target_warp, targetSeqLengths: list, inputSeqLength=None, pred_labels=None, true_labels=None):
+    def __init__(self, result: tf.Tensor, target, targetSeqLengths: list, inputSeqLength=None,
+                 pred_labels=None, true_labels=None):
         self.result = result
         self.target = target
-        self.target_warp = target_warp
+        #self.target_warp = target_warp
         self.targetSeqLengths = targetSeqLengths
         self.inputSeqLength = inputSeqLength
         self.pred_labels = pred_labels
@@ -256,13 +257,13 @@ class CTC:
 
     def createCtcCriterion(self):
         # using built-in ctc loss calculator
-        self.loss = tf.nn.ctc_loss(self.target, self.result, self.targetSeqLengths, time_major=True)
-        self.cost = tf.reduce_mean(self.loss)
+        # self.loss = tf.nn.ctc_loss(self.target, self.result, self.targetSeqLengths, time_major=True)
+        # self.cost = tf.reduce_mean(self.loss)
 
         # using baidu's warp ctc loss calculator
-        self.loss_warp = warpctc_tensorflow.ctc(activations=self.result,
-                                                flat_labels=self.target_warp,
-                                                label_lengths=self.targetSeqLengths,
-                                                input_lengths=self.inputSeqLength,
-                                                blank_label=36)
-        self.cost_warp = tf.reduce_mean(self.loss_warp)
+        self.loss = warpctc_tensorflow.ctc(activations=self.result,
+                                           flat_labels=self.target,
+                                           label_lengths=self.targetSeqLengths,
+                                           input_lengths=self.inputSeqLength,
+                                           blank_label=36)
+        self.cost = tf.reduce_mean(self.loss)

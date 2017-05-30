@@ -90,8 +90,8 @@ class Dataset:
         self.imgC = config.imgC
         self.datapath = path
         self.mode = mode  # test, train, val
-        self.cursor = 0
-        self.reset = False
+        # self.cursor = 0
+        # self.reset = False
         self.img_paths_cycle, self.labels_string_cycle = self.make_iters()
 
     def make_iters(self):
@@ -136,7 +136,6 @@ class Dataset:
             else:
                 print('Error when reading image {}. Ignoring it.'.format(p))
 
-        print(labels_int)
         labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
         dense_shape = [len(labels_str), max_length]
         label_set = (labels_str, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
@@ -145,17 +144,17 @@ class Dataset:
 
         return images, label_set, seqLengths
 
-    def check_validity_img(self):
-        """
-        Loads all images of the dataset and removes the ones that rise errors
-        :return:
-        """
-        print('Checking validity of dataset')
-        for p, l in tqdm(zip(self.img_paths_list, self.labels_string_list), total=len(self.img_paths_list)):
-            img_path = os.path.abspath(os.path.join(self.datapath, p))
-            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            if img is None:
-                print('Error with image {} : removing from dataset.'.format(p))
-                self.img_paths_list.remove(p)
-                self.labels_string_list.remove(l)
+    # def check_validity_img(self):
+    #     """
+    #     Loads all images of the dataset and removes the ones that rise errors
+    #     :return:
+    #     """
+    #     print('Checking validity of dataset')
+    #     for p, l in tqdm(zip(self.img_paths_list, self.labels_string_list), total=len(self.img_paths_list)):
+    #         img_path = os.path.abspath(os.path.join(self.datapath, p))
+    #         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    #         if img is None:
+    #             print('Error with image {} : removing from dataset.'.format(p))
+    #             self.img_paths_list.remove(p)
+    #             self.labels_string_list.remove(l)
 
