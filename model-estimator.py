@@ -2,8 +2,10 @@
 __author__ = 'solivr'
 
 import tensorflow as tf
+from tensorflow.contrib.learn.python.learn.estimators import model_fn as model_fn_lib
 from tensorflow.contrib.rnn import BasicLSTMCell
 import warpctc_tensorflow
+from crnn.decoding import simpleDecoderWithBlank, simpleDecoder, eval_accuracy
 
 
 def weightVar(shape, mean=0.0, stddev=0.1, name='weights'):
@@ -201,30 +203,45 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
 def crnn_fn(features, targets, mode, params):
     conv = deep_cnn(features, isTraining, params)  # params : input_shape
     prob, raw_pred = deep_bidirectional_lstm(conv, params)  # params: rnn_seq_length, keep_prob
-    predictions = {'prob': prob, 'raw_predictions': raw_pred}
+    predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
 
     # Loss
     loss_ctc = warpctc_tensorflow.ctc(activations=prob,
-                                            flat_labels=self.target_warp,
-                                            label_lengths=self.targetSeqLengths,
-                                            input_lengths=self.inputSeqLength,
-                                            blank_label=36)
+                                      flat_labels=targets,
+                                      label_lengths=params['targetSeqLengths'],
+                                      input_lengths=params['inputSeqLength'],
+                                      blank_label=36)
+
+    # Computing WER
+    str_pred_orginal = params['str_labels']
+    str_pred_blank = simpleDecoderWithBlank(raw_pred)
+    str_pred = simpleDecoder(raw_pred)
+
+    eval_metric_ops = {
+        'WER': eval_accuracy(str_pred, str_pred_orginal)
+    }
+
+    global_step = tf.Variable(0)
+    train_op = tf.train.RMSPropOptimizer(params['learning_rate']).minimize(loss_ctc, global_step=global_step)
+
+    return model_fn_lib.ModelFnOps(
+        mode=mode,
+        predictions=predictions_dict,
+        loss=loss_ctc,
+        train_op=train_op,
+        eval_metric_ops=eval_metric_ops)
 
 
-
-
-
-
-# MODEL FUNCTION
-def model_fn(features, targets, mode, params):
-    """# Logic to do the following:
-    # 1. Configure the model via TensorFlow operations
-    # 2. Define the loss function for training/evaluation
-    # 3. Define the training operation/optimizer
-    # 4. Generate predictions
-    # 5. Return predictions/loss/train_op/eval_metric_ops in ModelFnOps object"""
-
-    predictions  # dict e.g. predictions = {"results": tensor_of_predictions}
-    eval_metric_ops  # dict e.g. eval_metric_ops = { "accuracy": tf.metrics.accuracy(labels, predictions) }
-
-    return ModelFnOps(mode, predictions, loss, train_op, eval_metric_ops)
+# # MODEL FUNCTION
+# def model_fn(features, targets, mode, params):
+#     """# Logic to do the following:
+#     # 1. Configure the model via TensorFlow operations
+#     # 2. Define the loss function for training/evaluation
+#     # 3. Define the training operation/optimizer
+#     # 4. Generate predictions
+#     # 5. Return predictions/loss/train_op/eval_metric_ops in ModelFnOps object"""
+#
+#     predictions  # dict e.g. predictions = {"results": tensor_of_predictions}
+#     eval_metric_ops  # dict e.g. eval_metric_ops = { "accuracy": tf.metrics.accuracy(labels, predictions) }
+#
+#     return ModelFnOps(mode, predictions, loss, train_op, eval_metric_ops)
