@@ -84,7 +84,6 @@ class Dataset:
         self.reset = False
         self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath,
                                                                               'annotation_{}.txt'.format(self.mode))
-        self.check_validity_img()
         self.nSamples = len(self.img_paths_list)
 
     def nextBatch(self, batch_size):
@@ -109,14 +108,24 @@ class Dataset:
 
         # Open and preprocess images
         images = list()
-        for p in paths_batch_list:
+        to_rmv = list()  # list of img and labels to remove (ones that raised an error)
+        for i, p in enumerate(paths_batch_list):
             img_path = os.path.abspath(os.path.join(self.datapath, p))
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            try:
+
+            if img is not None:
                 resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
                 images.append(resized)
-            except:
-                sys.exit('Error with image reading, {}. Aborted.'.format(p))
+            else:
+                print('Error when reading image {}. Removing it.'.format(p))
+                to_rmv.append((i, p))
+                # sys.exit('Error with image reading, {}. Aborted.'.format(p))
+
+        # Remove error images/labels and shift cursor
+        for (i, p) in to_rmv:
+            self.img_paths_list.remove(p)
+            del self.labels_string_list[self.cursor + i]
+            self.cursor -= 1
 
         images = np.asarray(images)
         self.cursor += batch_size

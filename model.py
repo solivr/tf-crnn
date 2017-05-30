@@ -6,7 +6,6 @@ import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
 import os
 import warpctc_tensorflow
-import numpy as np
 
 
 class Model:
@@ -51,7 +50,7 @@ class CRNN():
         if self.config.inputShape:
             # resize image to have h x w
             input_tensor = tf.image.resize_images(self.inputImgs, self.config.inputShape)
-            tf.summary.image('input_image', input_tensor, 1)
+            # tf.summary.image('input_image', input_tensor, 1)
 
         # Following source code, not paper
 
@@ -67,7 +66,7 @@ class CRNN():
                 pool1 = tf.nn.max_pool(conv1, [1, 2, 2, 1], strides=[1, 2, 2, 1],
                                         padding='SAME', name='pool')
 
-                tf.summary.image('1st_sample', pool1[:, :, :, :1], 1)
+                # tf.summary.image('1st_sample', pool1[:, :, :, :1], 1)
                 weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/weights:0'][0]
                 tf.summary.histogram('weights', weights)
                 bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/bias:0'][0]
@@ -83,7 +82,7 @@ class CRNN():
                 pool2 = tf.nn.max_pool(conv2, [1, 2, 2, 1], strides=[1, 2, 2, 1],
                                        padding='SAME', name='pool1')
 
-                tf.summary.image('1st_sample', pool2[:, :, :, :1], 1)
+                # tf.summary.image('1st_sample', pool2[:, :, :, :1], 1)
                 weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/weights:0'][0]
                 tf.summary.histogram('weights', weights)
                 bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/bias:0'][0]
@@ -114,7 +113,7 @@ class CRNN():
                 pool4 = tf.nn.max_pool(conv4, [1, 2, 2, 1], strides=[1, 2, 1, 1],
                                        padding='SAME', name='pool4')
 
-                tf.summary.image('1st_sample', pool4[:, :, :, :1], 1)
+                # tf.summary.image('1st_sample', pool4[:, :, :, :1], 1)
                 weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/weights:0'][0]
                 tf.summary.histogram('weights', weights)
                 bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/bias:0'][0]
@@ -211,14 +210,6 @@ class CRNN():
                 bias = [var for var in tf.global_variables()
                         if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
                 tf.summary.histogram('bias', bias)
-
-            # fc_out = tf.contrib.layers.fully_connected(inputs=rnn_reshaped,
-            #                                            num_outputs=self.config.nClasses,
-            #                                            activation_fn=None,
-            #                                            trainable=True
-            #                                            # weights_initializer=tf.Variable(tf.truncated_normal([2*list_n_hidden[-1], n_classes])),
-            #                                            # biases_initializer=tf.Variable(tf.truncated_normal([n_classes])),
-            #                                            )  # [batch x width, n_classes]
 
             lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')  # [batch, width, n_classes]
 
