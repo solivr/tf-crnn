@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import cv2
 from tqdm import tqdm
+from itertools import cycle
 
 
 def format_mjsynth_txtfile(path, file_split):
@@ -43,33 +44,42 @@ def ascii2label(ascii):
 # -------------------------------------------------
 
 
-def str2int_labels(labels_list):
+# def str2int_labels(labels_list):
+#
+#     assert type(labels_list) is list
+#
+#     n_labels = len(labels_list)
+#     maxLength = 0
+#     indices = []
+#     values = []
+#     seqLengths = []
+#
+#     for i in range(n_labels):
+#         length_word = len(labels_list[i])
+#         if length_word > maxLength:
+#             maxLength = length_word
+#
+#         for j in range(length_word):
+#             indices.append([i, j])
+#             values.append(ascii2label(ord(labels_list[i][j])))
+#         seqLengths.append(length_word)
+#
+#     dense_shape = [n_labels, maxLength]
+#     indices = np.asarray(indices, dtype=np.int32)
+#     values = np.asarray(values, dtype=np.int32)
+#     dense_shape = np.asarray(dense_shape, dtype=np.int32)
+#
+#     # return Sparse Tensor
+#     return (indices, values, dense_shape), seqLengths
+# -------------------------------------------------
 
-    assert type(labels_list) is list
 
-    n_labels = len(labels_list)
-    maxLength = 0
-    indices = []
+def str2int_label(str_label):
     values = []
-    seqLengths = []
+    for c in str_label:
+        values.append(ascii2label(ord(c)))
 
-    for i in range(n_labels):
-        length_word = len(labels_list[i])
-        if length_word > maxLength:
-            maxLength = length_word
-
-        for j in range(length_word):
-            indices.append([i, j])
-            values.append(ascii2label(ord(labels_list[i][j])))
-        seqLengths.append(length_word)
-
-    dense_shape = [n_labels, maxLength]
-    indices = np.asarray(indices, dtype=np.int32)
-    values = np.asarray(values, dtype=np.int32)
-    dense_shape = np.asarray(dense_shape, dtype=np.int32)
-
-    # return Sparse Tensor
-    return (indices, values, dense_shape), seqLengths
+    return values
 # -------------------------------------------------
 
 
@@ -82,9 +92,14 @@ class Dataset:
         self.mode = mode  # test, train, val
         self.cursor = 0
         self.reset = False
-        self.img_paths_list, self.labels_string_list = format_mjsynth_txtfile(self.datapath,
-                                                                              'annotation_{}.txt'.format(self.mode))
-        self.nSamples = len(self.img_paths_list)
+        self.img_paths_cycle, self.labels_string_cycle = self.make_iters()
+
+    def make_iters(self):
+        img_paths_list, labels_string_list = format_mjsynth_txtfile(self.datapath,
+                                                                    'annotation_{}.txt'.format(self.mode))
+        self.nSamples = len(img_paths_list)
+
+        return cycle(iter(img_paths_list)), cycle(iter(labels_string_list))
 
     def nextBatch(self, batch_size):
         """
@@ -94,45 +109,39 @@ class Dataset:
                  label_set : tuple (sparse tensor, list string labels)
                  seqLength : length of the sequence
         """
-        try:
-            paths_batch_list = self.img_paths_list[self.cursor:self.cursor+batch_size]
-            labels_batch_list = self.labels_string_list[self.cursor:self.cursor+batch_size]
-        except IndexError:
-            paths_batch_list = self.img_paths_list[self.cursor:-1]
-            labels_batch_list = self.labels_string_list[self.cursor:-1]
-            self.reset = True
 
-        # Format labels to have a code per letter
-        labels_1d, seqLengths = str2int_labels(labels_batch_list)
-        label_set = (labels_1d, labels_batch_list)
-
-        # Open and preprocess images
         images = list()
-        to_rmv = list()  # list of img and labels to remove (ones that raised an error)
-        for i, p in enumerate(paths_batch_list):
+        labels_int = list()  # ascii-like code
+        labels_str = list()  # strings
+        seqLengths = list()  # lengths of words
+        max_length = 0  # length of the longest word
+        while len(images) < batch_size:
+            p = next(self.img_paths_cycle)
+            l = next(self.labels_string_cycle)
+
             img_path = os.path.abspath(os.path.join(self.datapath, p))
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-
             if img is not None:
+
+                # Resize and append image to list
                 resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
                 images.append(resized)
-            else:
-                print('Error when reading image {}. Removing it.'.format(p))
-                to_rmv.append((i, p))
-                # sys.exit('Error with image reading, {}. Aborted.'.format(p))
 
-        # Remove error images/labels and shift cursor
-        for (i, p) in to_rmv:
-            self.img_paths_list.remove(p)
-            del self.labels_string_list[self.cursor + i]
-            self.cursor -= 1
+                # Labels
+                labels_str.append(l)
+                labels_int.append(str2int_label(l))
+                seqLengths.append(len(l))
+                if len(l) > max_length:
+                    max_length = len(l)
+            else:
+                print('Error when reading image {}. Ignoring it.'.format(p))
+
+        print(labels_int)
+        labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
+        dense_shape = [len(labels_str), max_length]
+        label_set = (labels_str, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
 
         images = np.asarray(images)
-        self.cursor += batch_size
-
-        if self.reset:
-            self.cursor = 0
-            self.reset = False
 
         return images, label_set, seqLengths
 
