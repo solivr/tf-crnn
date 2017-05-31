@@ -21,14 +21,15 @@ config = Conf(n_classes=37,
               train_batch_size=128,
               test_batch_size=32,
               learning_rate=0.001,  # 0.001 for adadelta
+              decay_rate=0.95,
               max_iteration=3000000,
               max_epochs=100,
               display_interval=200,
               test_interval=200,
               save_interval=2500,
-              file_writer='../rms01',
+              file_writer='../rms_d095',
               data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
-              model_dir='../model-crnn-rms01/',
+              model_dir='../model-crnn-rms_d095/',
               input_shape=[32, 100],
               list_n_hidden=[256, 256],
               max_len=24)
@@ -66,16 +67,19 @@ def crnn_train(conf=config, sess=session):
 
     # Optimizer defintion
     global_step = tf.Variable(0)
-    #optimizer = tf.train.AdadeltaOptimizer(conf.learning_rate).minimize(ctc.loss, global_step=global_step)
-    optimizer = tf.train.RMSPropOptimizer(conf.learning_rate).minimize(ctc.loss, global_step=global_step)
+    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, 10000,
+                                               conf.decay_rate, staircase=True)
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
 
 
     # SUMMARIES
     # ---------
 
     # Cost
-    #tf.summary.scalar('cost', ctc.cost)
     tf.summary.scalar('cost_warp', ctc.cost)
+    # Learning rate
+    tf.summary.scalar('learning_rate', learning_rate)
     # Time spent per batch
     time_batch = tf.placeholder(tf.float32, None, name='time_var')
     tf.summary.scalar('time', time_batch)
