@@ -72,3 +72,44 @@ def eval_accuracy(predicted, true):
             equal += 1
     return float(equal) / tot
 
+
+def levenshtein(s1, s2):  # https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#Python
+    if len(s1) < len(s2):
+        return levenshtein(s2, s1)
+
+    # len(s1) >= len(s2)
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[
+                             j + 1] + 1  # j+1 instead of j since previous_row and current_row are one character longer
+            deletions = current_row[j] + 1  # than s2
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+def eval_WER(predicted, true):
+    tot = len(predicted)
+    false = 0
+    for i in range(tot):
+        if predicted[i] != true[i]:
+            false += 1
+    return float(false) / tot
+
+
+def eval_CER(predicted, true):
+    tot_chars = 0
+    error = 0
+    for w, t in zip(predicted, true):
+        tot_chars += len(t)
+        dist = levenshtein(w, t)
+        error += dist
+
+    return float(error) / tot_chars

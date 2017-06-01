@@ -21,15 +21,15 @@ config = Conf(n_classes=37,
               train_batch_size=128,
               test_batch_size=32,
               learning_rate=0.001,  # 0.001 for adadelta
-              decay_rate=0.95,
+              decay_rate=0.9,
               max_iteration=3000000,
               max_epochs=100,
               display_interval=200,
               test_interval=200,
               save_interval=2500,
-              file_writer='../rms_d095',
+              file_writer='../rms_d09',
               data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
-              model_dir='../model-crnn-rms_d095/',
+              model_dir='../model-crnn-rms_d09/',
               input_shape=[32, 100],
               list_n_hidden=[256, 256],
               max_len=24)
@@ -67,7 +67,7 @@ def crnn_train(conf=config, sess=session):
 
     # Optimizer defintion
     global_step = tf.Variable(0)
-    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, 10000,
+    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, 5000,
                                                conf.decay_rate, staircase=True)
     # optimizer = tf.train.AdadeltaOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
     optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
@@ -77,7 +77,7 @@ def crnn_train(conf=config, sess=session):
     # ---------
 
     # Cost
-    tf.summary.scalar('cost_warp', ctc.cost)
+    tf.summary.scalar('cost', ctc.cost)
     # Learning rate
     tf.summary.scalar('learning_rate', learning_rate)
     # Time spent per batch
@@ -86,6 +86,12 @@ def crnn_train(conf=config, sess=session):
     # Accuracy
     accuracy = tf.placeholder(tf.float32, None, name='accuracy_var')
     tf.summary.scalar('accuracy', accuracy)
+    # WER
+    WER = tf.placeholder(tf.float32, None, name='WER')
+    tf.summary.scalar('WER', WER)
+    # CER
+    CER = tf.placeholder(tf.float32, None, name='CER')
+    tf.summary.scalar('CER', CER)
 
     # Summary Writer
     merged = tf.summary.merge_all()
@@ -109,7 +115,7 @@ def crnn_train(conf=config, sess=session):
                          mode='train')
     data_test = Dataset(conf,
                         path=conf.dataSet,
-                        mode='test')
+                        mode='eval')
 
     # RUN SESSION
     # -----------
@@ -135,22 +141,22 @@ def crnn_train(conf=config, sess=session):
 
         # Eval accuarcy
         if step != 0 and step % conf.testInterval == 0:
-            images_batch_test, label_set_test, seq_len_test = data_test.nextBatch(conf.testBatchSize)
-            images_batch_test = np.expand_dims(images_batch_test, axis=-1)
+            images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch(conf.testBatchSize)
+            images_batch_eval = np.expand_dims(images_batch_eval, axis=-1)
 
             raw_pred = sess.run([crnn.rawPred],
                                 feed_dict={
-                                            x: images_batch_test,
+                                            x: images_batch_eval,
                                             keep_prob: 1.0,
                                             is_training: False,
                                             rnn_seq_len: test_seq_len,
                                             input_ctc_seq_len: test_seq_len,
-                                            target_seq_len: seq_len_test,
-                                            labels: label_set_test[1]
+                                            target_seq_len: seq_len_eval,
+                                            labels: label_set_eval[1]
                                            })
 
             # convert coding to strings
-            str_pred_orginal = label_set_test[0]
+            str_pred_orginal = label_set_eval[0]
             str_pred_blank = simpleDecoderWithBlank(raw_pred[0])
             str_pred = simpleDecoder(raw_pred[0])
 
