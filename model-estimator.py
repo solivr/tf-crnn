@@ -201,6 +201,17 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
 
 
 def crnn_fn(features, targets, mode, params):
+    """
+
+    :param features: dict :
+                            'input_images'
+                            'rnn_seq_len'
+                            'target_seq_len'
+    :param targets:
+    :param mode:
+    :param params:
+    :return:
+    """
     if mode == 'train':
         isTraining = True
     else:
