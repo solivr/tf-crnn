@@ -37,13 +37,14 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
 
 
 class CRNN():
-    def __init__(self, inputImgs, conf, rnnSeqLengths: list, isTraining: bool, keep_prob: float, session=None):
+    # def __init__(self, inputImgs, conf, rnnSeqLengths: list, isTraining: bool, keep_prob: float, session=None):
+    def __init__(self, inputImgs, conf, isTraining: bool, keep_prob: float, session=None):
         self.inputImgs = inputImgs
         self.sess = session
         self.config = conf
         self.isTraining = isTraining
         self.keep_prob = keep_prob
-        self.rnnSeqLengths = rnnSeqLengths
+        # self.rnnSeqLengths = rnnSeqLengths
         self.conv = self.deep_cnn()
         self.prob = self.deep_bidirectional_lstm()
         # self.strPred = tensorDecoder(self.rawPred)
@@ -53,6 +54,8 @@ class CRNN():
             # resize image to have h x w
             input_tensor = tf.image.resize_images(self.inputImgs, self.config.inputShape)
             # tf.summary.image('input_image', input_tensor, 1)
+        else:
+            input_tensor = self.inputImgs
 
         # Following source code, not paper
 
@@ -191,7 +194,7 @@ class CRNN():
                                                                                  bw_cell_list,
                                                                                  self.conv,
                                                                                  dtype=tf.float32,
-                                                                                 sequence_length=self.rnnSeqLengths
+                                                                                 # sequence_length=self.rnnSeqLengths
                                                                                  )
 
             # Dropout layer
