@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
 
+import tensorflow as tf
 
 def labelInt2Char(n):
     if 0 <= n <= 9:
@@ -113,3 +114,11 @@ def eval_CER(predicted, true):
         error += dist
 
     return float(error) / tot_chars
+
+
+def evaluation_metrics(predicted, true):
+    accuracy = eval_accuracy(predicted, true)
+    wer = eval_WER(predicted, true)
+    cer = eval_CER(predicted, true)
+
+    return accuracy, wer, cer

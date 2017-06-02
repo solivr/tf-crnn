@@ -7,7 +7,7 @@ import time
 from model import CRNN, CTC
 from config import Conf
 from dataset import Dataset
-from decoding import convertSparseArrayToStr, simpleDecoder, eval_accuracy, simpleDecoderWithBlank
+from decoding import simpleDecoder, evaluation_metrics
 
 
 # CONFIG PARAMETERS
@@ -24,7 +24,7 @@ config = Conf(n_classes=37,
               decay_rate=0.9,
               max_iteration=3000000,
               max_epochs=100,
-              display_interval=200,
+              # display_interval=200,
               test_interval=200,
               save_interval=2500,
               file_writer='../rms_d09',
@@ -57,6 +57,9 @@ def crnn_train(conf=config, sess=session):
     train_seq_len = [conf.maxLength for _ in range(conf.trainBatchSize)]
     test_seq_len = [conf.maxLength for _ in range(conf.testBatchSize)]
 
+    # # Evaluation
+    # true_string = tf.placeholder(tf.string, [conf.testBatchSize, None], name='true_label_string')
+    # predicted_string = tf.placeholder(tf.string, [conf.testBatchSize, None], name='predicted_string')
 
     # NETWORK
     # -------
@@ -71,6 +74,10 @@ def crnn_train(conf=config, sess=session):
                                                conf.decay_rate, staircase=True)
     # optimizer = tf.train.AdadeltaOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
     optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
+
+    # ERRORS EVALUATION
+    # -----------------
+    # accuracy, WER, CER = evaluation_metrics(predicted_string, true_string)
 
 
     # SUMMARIES
@@ -115,14 +122,13 @@ def crnn_train(conf=config, sess=session):
                          mode='train')
     data_test = Dataset(conf,
                         path=conf.dataSet,
-                        mode='eval')
+                        mode='val')
 
     # RUN SESSION
     # -----------
 
     start_time = time.time()
     t = start_time
-    accuracy_train = 0
     while step < conf.maxIteration:
         # Prepare batch and add channel dimension
         images_batch, label_set, seq_len = data_train.nextBatch(conf.trainBatchSize)
@@ -130,21 +136,21 @@ def crnn_train(conf=config, sess=session):
 
         cost, _, step = sess.run([ctc.cost, optimizer, global_step],
                                  feed_dict={
-                                               x: images_batch,
-                                               keep_prob: 0.7,
-                                               rnn_seq_len: train_seq_len,
-                                               input_ctc_seq_len: train_seq_len,
-                                               target_seq_len: seq_len,
-                                               labels: label_set[1],
-                                               is_training: True,
-                                             })
+                                           x: images_batch,
+                                           keep_prob: 0.7,
+                                           rnn_seq_len: train_seq_len,
+                                           input_ctc_seq_len: train_seq_len,
+                                           target_seq_len: seq_len,
+                                           labels: label_set[1],
+                                           is_training: True,
+                                        })
 
         # Eval accuarcy
         if step != 0 and step % conf.testInterval == 0:
             images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch(conf.testBatchSize)
             images_batch_eval = np.expand_dims(images_batch_eval, axis=-1)
 
-            raw_pred = sess.run([crnn.rawPred],
+            raw_pred = sess.run(crnn.rawPred,
                                 feed_dict={
                                             x: images_batch_eval,
                                             keep_prob: 1.0,
@@ -152,29 +158,23 @@ def crnn_train(conf=config, sess=session):
                                             rnn_seq_len: test_seq_len,
                                             input_ctc_seq_len: test_seq_len,
                                             target_seq_len: seq_len_eval,
-                                            labels: label_set_eval[1]
+                                            labels: label_set_eval[1],
                                            })
 
-            # convert coding to strings
-            str_pred_orginal = label_set_eval[0]
-            str_pred_blank = simpleDecoderWithBlank(raw_pred[0])
-            str_pred = simpleDecoder(raw_pred[0])
+            str_pred = simpleDecoder(raw_pred)
+            # acc = eval_accuracy(str_pred, label_set_eval[0])
+            # wer = eval_WER(str_pred, label_set_eval[0])
+            # cer = eval_CER(str_pred, label_set_eval[0])
+            acc, wer, cer = evaluation_metrics(str_pred, label_set_eval[0])
 
-            # evaluate accuracy
-            accuracy_train = eval_accuracy(str_pred, str_pred_orginal)
-            print('step: {}, training accuracy: {}'.format(step, accuracy_train))
+            print('step: {}, cost: {}, training accuracy: {}, cer: {}'.format(step, cost, acc, cer))
 
-            for i in range(5):
-                print('original: {}, predicted(no decode): {}, predicted: {}'.format(str_pred_orginal[i], str_pred_blank[i],
-                                                                                     str_pred[i]))
+            # for i in range(5):
+            #     print('original: {}, predicted(no decode): {}, predicted: {}'.format(label_set_eval[0][i],
+            #                                                                          str_pred[i]))
 
-        # Display
-        if step % conf.displayInterval == 0:
             time_elapse = time.time() - t
             t = time.time()
-            total_time = time.time() - start_time
-            print('* step: {}, cost: {}, step time: {:.2}s, total time: {:.2}s'.format(step, cost, time_elapse,
-                                                                                       total_time))
 
             summary, step = sess.run([merged, global_step],
                                      feed_dict={
@@ -186,7 +186,9 @@ def crnn_train(conf=config, sess=session):
                                          labels: label_set[1],
                                          is_training: False,
                                          time_batch: time_elapse,
-                                         accuracy: accuracy_train
+                                         accuracy: acc,
+                                         WER: wer,
+                                         CER: cer
                                      })
 
             train_writer.add_summary(summary, step)

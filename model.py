@@ -6,6 +6,7 @@ import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
 import os
 import warpctc_tensorflow
+# from decoding import tensorDecoder
 
 
 class Model:
@@ -45,6 +46,7 @@ class CRNN():
         self.rnnSeqLengths = rnnSeqLengths
         self.conv = self.deep_cnn()
         self.prob = self.deep_bidirectional_lstm()
+        # self.strPred = tensorDecoder(self.rawPred)
 
     def deep_cnn(self) -> tf.Tensor:
         if self.config.inputShape:
@@ -211,7 +213,8 @@ class CRNN():
                         if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
                 tf.summary.histogram('bias', bias)
 
-            lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')  # [batch, width, n_classes]
+            # Reshape to [batch, width, n_classes]
+            lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')
 
             self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
             tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
