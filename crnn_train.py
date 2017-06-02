@@ -42,7 +42,7 @@ def crnn_train(conf=config, sess=session):
     # ------------
 
     # Sequence length, parameter of stack_bidirectional_dynamic_rnn,
-    rnn_seq_len = tf.placeholder(tf.int32, [None], name='sequence_length')
+    # rnn_seq_len = tf.placeholder(tf.int32, [None], name='sequence_length')
     target_seq_len = tf.placeholder(tf.int32, [None], name='target_seq_len')
     input_ctc_seq_len = tf.placeholder(tf.int32, [None], name='input_ctc_seq_len')
     is_training = tf.placeholder(tf.bool, name='trainable')
@@ -64,7 +64,7 @@ def crnn_train(conf=config, sess=session):
     # -------
 
     # Network and ctc definition
-    crnn = CRNN(x, conf, rnn_seq_len, is_training, keep_prob, session=sess)
+    crnn = CRNN(x, conf, is_training, keep_prob, session=sess)
     ctc = CTC(crnn.prob, labels, target_seq_len, inputSeqLength=input_ctc_seq_len)
 
     # Optimizer defintion
@@ -134,7 +134,7 @@ def crnn_train(conf=config, sess=session):
                                  feed_dict={
                                            x: images_batch,
                                            keep_prob: 0.7,
-                                           rnn_seq_len: train_seq_len,
+                                           # rnn_seq_len: train_seq_len,
                                            input_ctc_seq_len: train_seq_len,
                                            target_seq_len: seq_len,
                                            labels: label_set[1],
@@ -151,7 +151,7 @@ def crnn_train(conf=config, sess=session):
                                             x: images_batch_eval,
                                             keep_prob: 1.0,
                                             is_training: False,
-                                            rnn_seq_len: test_seq_len,
+                                            # rnn_seq_len: test_seq_len,
                                             input_ctc_seq_len: test_seq_len,
                                             target_seq_len: seq_len_eval,
                                             labels: label_set_eval[1],
