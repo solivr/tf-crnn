@@ -26,6 +26,8 @@ def deep_cnn(inputImgs, isTraining, params) -> tf.Tensor:
     if params['input_shape']:
         # resize image to have h x w
         input_tensor = tf.image.resize_images(inputImgs, params['input_shape'])
+    else:
+        input_tensor = inputImgs
 
     # Following source code, not paper
 
@@ -38,7 +40,7 @@ def deep_cnn(inputImgs, isTraining, params) -> tf.Tensor:
             out = tf.nn.bias_add(conv, b)
             conv1 = tf.nn.relu(out)
             pool1 = tf.nn.max_pool(conv1, [1, 2, 2, 1], strides=[1, 2, 2, 1],
-                                    padding='SAME', name='pool')
+                                   padding='SAME', name='pool')
 
             # tf.summary.image('1st_sample', pool1[:, :, :, :1], 1)
             weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/weights:0'][0]
@@ -167,7 +169,7 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
                                                                         bw_cell_list,
                                                                         inputs,
                                                                         dtype=tf.float32,
-                                                                        sequence_length=params['rnn_seq_lengths']
+                                                                        # sequence_length=params['rnn_seq_lengths']
                                                                         )
 
         # Dropout layer
@@ -192,7 +194,7 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
         lstm_out = tf.reshape(fc_out, [-1, shape[1], nClasses], name='reshape_out')  # [batch, width, n_classes]
 
         rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
-        tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
+        # tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
 
         # Swap batch and time axis
         lstm_out = tf.transpose(lstm_out, [1, 0, 2], name='transpose_time_major')  # [width(time), batch, n_classes]
@@ -205,11 +207,16 @@ def crnn_fn(features, targets, mode, params):
 
     :param features: dict :
                             'input_images'
-                            'rnn_seq_len'
-                            'target_seq_len'
-    :param targets:
+                            'rnn_seq_length'
+                            'target_seq_length'
+    :param targets: labels. flattend (1D) array with encoded label (one code per character)
     :param mode:
-    :param params:
+    :param params: dict :
+                            'input_shape'
+                            'keep_prob'
+                            'starting_learning_rate'
+                            'decay_steps'
+                            'decay_rate'
     :return:
     """
     if mode == 'train':
@@ -217,15 +224,15 @@ def crnn_fn(features, targets, mode, params):
     else:
         isTraining = False
 
-    conv = deep_cnn(features, isTraining, params)  # params : input_shape
+    conv = deep_cnn(features['input_images'], isTraining, params)  # params : input_shape
     prob, raw_pred = deep_bidirectional_lstm(conv, params)  # params: rnn_seq_length, keep_prob
     predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
 
     # Loss
     loss_ctc = warpctc_tensorflow.ctc(activations=prob,
                                       flat_labels=targets,
-                                      label_lengths=params['rnn_seq_length'],
-                                      input_lengths=params['inputSeqLength'],
+                                      label_lengths=features['target_seq_length'],
+                                      input_lengths=features['rnn_seq_length'],
                                       blank_label=36)
 
     # # Computing WER
@@ -238,7 +245,9 @@ def crnn_fn(features, targets, mode, params):
     # }
 
     global_step = tf.Variable(0)
-    train_op = tf.train.RMSPropOptimizer(params['learning_rate']).minimize(loss_ctc, global_step=global_step)
+    learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
+                                               params['decay_rate'], staircase=True)
+    train_op = tf.train.RMSPropOptimizer(learning_rate).minimize(loss_ctc, global_step=global_step)
 
     return model_fn_lib.ModelFnOps(
         mode=mode,
