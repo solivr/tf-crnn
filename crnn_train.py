@@ -24,8 +24,7 @@ config = Conf(n_classes=37,
               decay_rate=0.9,
               max_iteration=3000000,
               max_epochs=100,
-              # display_interval=200,
-              test_interval=200,
+              eval_interval=200,
               save_interval=2500,
               file_writer='../rms_d09',
               data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
@@ -87,9 +86,6 @@ def crnn_train(conf=config, sess=session):
     tf.summary.scalar('cost', ctc.cost)
     # Learning rate
     tf.summary.scalar('learning_rate', learning_rate)
-    # Time spent per batch
-    time_batch = tf.placeholder(tf.float32, None, name='time_var')
-    tf.summary.scalar('time', time_batch)
     # Accuracy
     accuracy = tf.placeholder(tf.float32, None, name='accuracy_var')
     tf.summary.scalar('accuracy', accuracy)
@@ -146,7 +142,7 @@ def crnn_train(conf=config, sess=session):
                                         })
 
         # Eval accuarcy
-        if step != 0 and step % conf.testInterval == 0:
+        if step != 0 and step % conf.evalInterval == 0:
             images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch(conf.testBatchSize)
             images_batch_eval = np.expand_dims(images_batch_eval, axis=-1)
 
@@ -185,7 +181,6 @@ def crnn_train(conf=config, sess=session):
                                          target_seq_len: seq_len,
                                          labels: label_set[1],
                                          is_training: False,
-                                         time_batch: time_elapse,
                                          accuracy: acc,
                                          WER: wer,
                                          CER: cer
