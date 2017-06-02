@@ -90,7 +90,7 @@ class Dataset:
         self.imgC = config.imgC
         self.datapath = path
         self.mode = mode  # test, train, val
-        # self.cursor = 0
+        self.count = 0
         # self.reset = False
         self.img_paths_cycle, self.labels_string_cycle = self.make_iters()
 
@@ -121,19 +121,21 @@ class Dataset:
 
             img_path = os.path.abspath(os.path.join(self.datapath, p))
             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            if img is not None:
+            try:
+                if not img.data:
+                    print('Error when reading image {}. Ignoring it.'.format(p))
+                else:
+                    # Resize and append image to list
+                    resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
+                    images.append(resized)
 
-                # Resize and append image to list
-                resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
-                images.append(resized)
-
-                # Labels
-                labels_str.append(l)
-                labels_int.append(str2int_label(l))
-                seqLengths.append(len(l))
-                if len(l) > max_length:
-                    max_length = len(l)
-            else:
+                    # Labels
+                    labels_str.append(l)
+                    labels_int.append(str2int_label(l))
+                    seqLengths.append(len(l))
+                    if len(l) > max_length:
+                        max_length = len(l)
+            except AttributeError:
                 print('Error when reading image {}. Ignoring it.'.format(p))
 
         labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
@@ -141,6 +143,7 @@ class Dataset:
         label_set = (labels_str, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
 
         images = np.asarray(images)
+        self.count += batch_size
 
         return images, label_set, seqLengths
 
