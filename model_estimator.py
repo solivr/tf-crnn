@@ -204,18 +204,18 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
 
 def crnn_fn(features, targets, mode, params):
     """
-    :param features: dict :
+    :param features: dict {
                             'input_images'
                             'rnn_seq_length'
-                            'target_seq_length'
+                            'target_seq_length' }
     :param targets: labels. flattend (1D) array with encoded label (one code per character)
     :param mode:
-    :param params: dict :
+    :param params: dict {
                             'input_shape'
                             'keep_prob'
                             'starting_learning_rate'
                             'decay_steps'
-                            'decay_rate'
+                            'decay_rate' }
     :return:
     """
     if mode == 'train':

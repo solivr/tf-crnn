@@ -9,18 +9,37 @@ from tqdm import tqdm
 from itertools import cycle
 
 
-def format_mjsynth_txtfile(path, file_split):
-    with open(os.path.join(path, file_split), 'r') as f:
+def load_paths_labels(path, file_split):
+    filename = os.path.join(path, file_split)
+    # with open(os.path.join(path, file_split), 'r') as f:
+    #     lines = f.readlines()
+    # with open(os.path.join(path, 'lexicon.txt'), 'r') as f:
+    #     lexicon = f.readlines()
+    #
+    # # Split lines into path and label
+    # linesplit = [l[:-1].split(' ') for l in lines]
+    #
+    # label_index = [int(s[1]) for s in linesplit]
+    # img_paths = [s[0] for s in linesplit]
+    #
+    # labels_string = [lexicon[ind][:-1] for ind in label_index]
+    #
+    # return img_paths, labels_string
+
+    root = os.path.split(filename)[0]
+
+    with open(filename, 'r') as f:
         lines = f.readlines()
     with open(os.path.join(path, 'lexicon.txt'), 'r') as f:
         lexicon = f.readlines()
 
-    # Split lines into path and label
     linesplit = [l[:-1].split(' ') for l in lines]
 
-    label_index = [int(s[1]) for s in linesplit]
-    img_paths = [s[0] for s in linesplit]
+    # Absolute path
+    img_paths = [os.path.abspath(os.path.join(root, s[0])) for s in linesplit]
 
+    # Label
+    label_index = [int(s[1]) for s in linesplit]
     labels_string = [lexicon[ind][:-1] for ind in label_index]
 
     return img_paths, labels_string
@@ -95,7 +114,7 @@ class Dataset:
         self.img_paths_cycle, self.labels_string_cycle = self.make_iters()
 
     def make_iters(self):
-        img_paths_list, labels_string_list = format_mjsynth_txtfile(self.datapath,
+        img_paths_list, labels_string_list = load_paths_labels(self.datapath,
                                                                     'annotation_{}.txt'.format(self.mode))
         self.nSamples = len(img_paths_list)
 
@@ -119,8 +138,7 @@ class Dataset:
             p = next(self.img_paths_cycle)
             l = next(self.labels_string_cycle)
 
-            img_path = os.path.abspath(os.path.join(self.datapath, p))
-            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
             try:
                 if not img.data:
                     print('Error when reading image {}. Ignoring it.'.format(p))
@@ -160,4 +178,36 @@ class Dataset:
     #             print('Error with image {} : removing from dataset.'.format(p))
     #             self.img_paths_list.remove(p)
     #             self.labels_string_list.remove(l)
+# ------------------------------------------------------------
 
+
+def verify_list_paths(list_paths, new_filename):
+    updated_list = list_paths.copy()
+    for p in tqdm(list_paths, total=len(list_paths)):
+        img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
+
+        if img is None:
+            print('Error when reading image {}. Removing it.'.format(p))
+        elif not img.data:
+            print('Error when reading image {}. Ignoring it.'.format(p))
+        else:
+            continue
+
+        # If problem delete img from disk and from list
+        updated_list.remove(p)
+        os.remove(p)
+
+    print('Writing updated list of paths in {}'.format(new_filename))
+    with open(new_filename, 'w') as handle:
+        for p in tqdm(updated_list, total=len(updated_list)):
+            # Reconstruct relative path
+            root, file = os.path.split(p)
+            dirs = tuple(['.'] + root.split('/')[-2:] + [file])
+            relative_p = os.path.join(*dirs)
+
+            # Label lexicon
+            lex = file.split('.')[0].split('_')[-1]
+
+            file_line = '{} {}{}'.format(relative_p, lex, os.linesep)
+
+            handle.write(file_line)
