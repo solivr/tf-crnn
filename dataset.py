@@ -184,7 +184,11 @@ class Dataset:
 def verify_list_paths(list_paths, new_filename):
     updated_list = list_paths.copy()
     for p in tqdm(list_paths, total=len(list_paths)):
-        img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
+        try:
+            img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
+        except FileNotFoundError:
+            print('File already deleted')
+            continue
 
         if img is None:
             print('Error when reading image {}. Removing it.'.format(p))
