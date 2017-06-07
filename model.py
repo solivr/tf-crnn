@@ -50,12 +50,12 @@ class CRNN():
         # self.strPred = tensorDecoder(self.rawPred)
 
     def deep_cnn(self) -> tf.Tensor:
-        if self.config.inputShape:
-            # resize image to have h x w
-            input_tensor = tf.image.resize_images(self.inputImgs, self.config.inputShape)
-            # tf.summary.image('input_image', input_tensor, 1)
-        else:
-            input_tensor = self.inputImgs
+        # if self.config.inputShape and not self.isTraining:
+        #     # resize image to have h x w
+        #     input_tensor = tf.image.resize_images(self.inputImgs, self.config.inputShape)
+        #     # tf.summary.image('input_image', input_tensor, 1)
+        # else:
+        input_tensor = self.inputImgs
 
         # Following source code, not paper
 
