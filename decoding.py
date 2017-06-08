@@ -3,6 +3,31 @@ __author__ = 'solivr'
 
 import tensorflow as tf
 
+
+def ascii2label(ascii):
+    """
+    Offsets the ASCII code to have continuous labelling
+    :param ascii: ascii code (int)
+    :return: offset label (int)
+    """
+    n_digits = 10
+    if 48 <= ascii <= 57:  # 0-9
+        c = ascii - 48
+    elif 65 <= ascii <= 90:  # A-Z
+        c = ascii - 65 + n_digits
+    elif 97 <= ascii <= 122:  # a-z
+        c = ascii - 97 + n_digits
+    return c
+
+
+def str2int_label(str_label):
+    values = []
+    for c in str_label:
+        values.append(ascii2label(ord(c)))
+
+    return values
+
+
 def labelInt2Char(n):
     if 0 <= n <= 9:
         c = chr(n + 48)

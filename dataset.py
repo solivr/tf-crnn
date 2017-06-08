@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 from itertools import cycle
+from decoding import str2int_label
 
 
 def load_paths_labels(path, file_split):
@@ -46,20 +47,20 @@ def load_paths_labels(path, file_split):
 # -------------------------------------------------
 
 
-def ascii2label(ascii):
-    """
-    Offsets the ASCII code to have continuous labelling
-    :param ascii: ascii code (int)
-    :return: offset label (int)
-    """
-    n_digits = 10
-    if 48 <= ascii <= 57:  # 0-9
-        c = ascii - 48
-    elif 65 <= ascii <= 90:  # A-Z
-        c = ascii - 65 + n_digits
-    elif 97 <= ascii <= 122:  # a-z
-        c = ascii - 97 + n_digits
-    return c
+# def ascii2label(ascii):
+#     """
+#     Offsets the ASCII code to have continuous labelling
+#     :param ascii: ascii code (int)
+#     :return: offset label (int)
+#     """
+#     n_digits = 10
+#     if 48 <= ascii <= 57:  # 0-9
+#         c = ascii - 48
+#     elif 65 <= ascii <= 90:  # A-Z
+#         c = ascii - 65 + n_digits
+#     elif 97 <= ascii <= 122:  # a-z
+#         c = ascii - 97 + n_digits
+#     return c
 # -------------------------------------------------
 
 
@@ -93,12 +94,12 @@ def ascii2label(ascii):
 # -------------------------------------------------
 
 
-def str2int_label(str_label):
-    values = []
-    for c in str_label:
-        values.append(ascii2label(ord(c)))
-
-    return values
+# def str2int_label(str_label):
+#     values = []
+#     for c in str_label:
+#         values.append(ascii2label(ord(c)))
+#
+#     return values
 # -------------------------------------------------
 
 
