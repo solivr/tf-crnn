@@ -5,7 +5,9 @@ import tensorflow as tf
 from tensorflow.contrib.learn.python.learn.estimators import model_fn as model_fn_lib
 from tensorflow.contrib.rnn import BasicLSTMCell
 import warpctc_tensorflow
-from crnn.decoding import simpleDecoderWithBlank, simpleDecoder, eval_accuracy
+import cv2
+import numpy as np
+from crnn.decoding import str2int_label
 
 
 def weightVar(shape, mean=0.0, stddev=0.1, name='weights'):
@@ -22,12 +24,12 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
     return tf.nn.conv2d(input, filter, strides=strides, padding=padding, name=name)
 
 
-def deep_cnn(inputImgs, isTraining, params) -> tf.Tensor:
-    if params['input_shape']:
-        # resize image to have h x w
-        input_tensor = tf.image.resize_images(inputImgs, params['input_shape'])
-    else:
-        input_tensor = inputImgs
+def deep_cnn(inputImgs, isTraining) -> tf.Tensor:
+    # if params['input_shape']:
+    #     # resize image to have h x w
+    #     input_tensor = tf.image.resize_images(inputImgs, params['input_shape'])
+    # else:
+    input_tensor = inputImgs
 
     # Following source code, not paper
 
@@ -202,10 +204,91 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
         return lstm_out, rawPred
 
 
+# def load_batch(list_paths, list_labels, input_shape):
+#     """
+#     Load all the images and
+#     :param paths:
+#     :return:
+#     """
+#     try:
+#         iW, iH = input_shape
+#     except ValueError:
+#         print('Image should be grayscale : input_size = W x H')
+#         return None
+#
+#     images = list()
+#     labels_int = list()
+#     # seq_lengths = list()
+#     max_length = 0
+#
+#     for path, label in zip(list_paths, list_labels):
+#         try:
+#             img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+#         except FileNotFoundError:
+#             print('{} not found'.format(path))
+#             return None
+#
+#         resized = cv2.resize(img, (iW, iH), interpolation=cv2.INTER_CUBIC)
+#         images.append(resized)
+#
+#         labels_int.append(str2int_label(label))
+#         # seq_lengths.append(len(label))
+#         # if len(label) > max_length:
+#         #     max_length = len(label)
+#
+#     labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
+#     dense_shape = [len(list_labels), max_length]
+#     label_set = (list_labels, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
+#
+#     images = np.asarray(images)
+#
+#     return images, label_set #, seq_lengths
+
+def load_batch(list_paths : tf.Tensor, list_labels : tf.Tensor, input_shape):
+    """
+    Load all the images and
+    :param paths:
+    :return:
+    """
+    try:
+        iW, iH = input_shape
+    except ValueError:
+        print('Image should be grayscale : input_size = W x H')
+        return None
+
+    images = list()
+    labels_int = list()
+    # seq_lengths = list()
+    max_length = 0
+
+    for path, label in zip(list_paths, list_labels):
+        try:
+            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        except FileNotFoundError:
+            print('{} not found'.format(path))
+            return None
+
+        resized = cv2.resize(img, (iW, iH), interpolation=cv2.INTER_CUBIC)
+        images.append(resized)
+
+        labels_int.append(str2int_label(label))
+        # seq_lengths.append(len(label))
+        # if len(label) > max_length:
+        #     max_length = len(label)
+
+    labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
+    dense_shape = [len(list_labels), max_length]
+    label_set = (list_labels, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
+
+    images = np.asarray(images)
+
+    return images, label_set #, seq_lengths
+
+
 def crnn_fn(features, targets, mode, params):
     """
     :param features: dict {
-                            'input_images'
+                            'input_paths'
                             'rnn_seq_length'
                             'target_seq_length' }
     :param targets: labels. flattend (1D) array with encoded label (one code per character)
@@ -220,10 +303,15 @@ def crnn_fn(features, targets, mode, params):
     """
     if mode == 'train':
         isTraining = True
+        params['keep_prob'] = 0.7
     else:
         isTraining = False
+        params['keep_prob'] = 1.0
 
-    conv = deep_cnn(features['input_images'], isTraining, params)  # params : input_shape
+    # Load images and format labels
+    images, label_set = load_batch(features['input_paths'], targets, params['input_shape'])
+
+    conv = deep_cnn(images, isTraining)  # params : input_shape
     prob, raw_pred = deep_bidirectional_lstm(conv, params)  # params: rnn_seq_length, keep_prob
     predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
 
