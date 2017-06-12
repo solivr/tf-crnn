@@ -66,7 +66,7 @@ def crnn_train(conf, sess=session):
 
     # Optimizer defintion
     global_step = tf.Variable(0)
-    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, 10000,
+    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, conf.decay_steps,
                                                conf.decay_rate, staircase=True)
     if conf.optimizer == 'ada':
         optimizer = tf.train.AdadeltaOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
@@ -206,8 +206,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--learning_rate', type=float, help='Starting learning rate', default=0.001)
     parser.add_argument('-d', '--decay_rate', type=float, help='Decay rate for learning rate', default=0.9)
+    parser.add_argument('-s', '--decay_steps', type=int, help='Decay steps for learning rate', default=1000)
     parser.add_argument('-e', '--eval_interval', type=float, help='Evaluation interval (steps)', default=500)
-    parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (ada or rms)', default='rms')
+    parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (ada, adam or rms)', default='rms')
 
     args = parser.parse_args()
 
@@ -216,6 +217,7 @@ if __name__ == '__main__':
                   eval_batch_size=64,
                   learning_rate=args.learning_rate,
                   decay_rate=args.decay_rate,
+                  decay_steps=args.decay_steps,
                   optimizer=args.optimizer,
                   max_iteration=3000000,
                   max_epochs=100,
