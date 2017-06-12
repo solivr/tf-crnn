@@ -3,7 +3,7 @@ __author__ = 'solivr'
 
 from typing import Callable
 import tensorflow as tf
-from tensorflow.contrib.rnn import BasicLSTMCell
+from tensorflow.contrib.rnn import BasicLSTMCell, LSTMCell
 import os
 import warpctc_tensorflow
 # from decoding import tensorDecoder
@@ -187,8 +187,10 @@ class CRNN():
         with tf.name_scope('deep_bidirectional_lstm'):
             # Forward direction cells
             fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in self.config.listNHidden]
+            # fw_cell_list = [LSTMCell(nh, forget_bias=1.0) for nh in self.config.listNHidden]
             # Backward direction cells
             bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in self.config.listNHidden]
+            # bw_cell_list = [LSTMCell(nh, forget_bias=1.0) for nh in self.config.listNHidden]
 
             self.lstm_net, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
                                                                                  bw_cell_list,
