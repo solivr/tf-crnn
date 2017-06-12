@@ -47,62 +47,6 @@ def load_paths_labels(path, file_split):
 # -------------------------------------------------
 
 
-# def ascii2label(ascii):
-#     """
-#     Offsets the ASCII code to have continuous labelling
-#     :param ascii: ascii code (int)
-#     :return: offset label (int)
-#     """
-#     n_digits = 10
-#     if 48 <= ascii <= 57:  # 0-9
-#         c = ascii - 48
-#     elif 65 <= ascii <= 90:  # A-Z
-#         c = ascii - 65 + n_digits
-#     elif 97 <= ascii <= 122:  # a-z
-#         c = ascii - 97 + n_digits
-#     return c
-# -------------------------------------------------
-
-
-# def str2int_labels(labels_list):
-#
-#     assert type(labels_list) is list
-#
-#     n_labels = len(labels_list)
-#     maxLength = 0
-#     indices = []
-#     values = []
-#     seqLengths = []
-#
-#     for i in range(n_labels):
-#         length_word = len(labels_list[i])
-#         if length_word > maxLength:
-#             maxLength = length_word
-#
-#         for j in range(length_word):
-#             indices.append([i, j])
-#             values.append(ascii2label(ord(labels_list[i][j])))
-#         seqLengths.append(length_word)
-#
-#     dense_shape = [n_labels, maxLength]
-#     indices = np.asarray(indices, dtype=np.int32)
-#     values = np.asarray(values, dtype=np.int32)
-#     dense_shape = np.asarray(dense_shape, dtype=np.int32)
-#
-#     # return Sparse Tensor
-#     return (indices, values, dense_shape), seqLengths
-# -------------------------------------------------
-
-
-# def str2int_label(str_label):
-#     values = []
-#     for c in str_label:
-#         values.append(ascii2label(ord(c)))
-#
-#     return values
-# -------------------------------------------------
-
-
 class Dataset:
     def __init__(self, config, path, mode):
         self.imgH = config.imgH
@@ -116,7 +60,7 @@ class Dataset:
 
     def make_iters(self):
         img_paths_list, labels_string_list = load_paths_labels(self.datapath,
-                                                                    'annotation_{}.txt'.format(self.mode))
+                                                                    'new_annotation_{}.txt'.format(self.mode))
         self.nSamples = len(img_paths_list)
 
         return cycle(iter(img_paths_list)), cycle(iter(labels_string_list))
@@ -141,21 +85,19 @@ class Dataset:
 
             img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
             try:
-                if not img.data:
-                    print('Error when reading image {}. Ignoring it.'.format(p))
-                else:
-                    # Resize and append image to list
-                    resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
-                    images.append(resized)
+                # Resize and append image to list
+                resized = cv2.resize(img, (self.imgW, self.imgH), interpolation=cv2.INTER_CUBIC)
+                images.append(resized)
 
-                    # Labels
-                    labels_str.append(l)
-                    labels_int.append(str2int_label(l))
-                    seqLengths.append(len(l))
-                    if len(l) > max_length:
-                        max_length = len(l)
+                # Labels
+                labels_str.append(l)
+                labels_int.append(str2int_label(l))
+                seqLengths.append(len(l))
+                if len(l) > max_length:
+                    max_length = len(l)
             except AttributeError:
                 print('Error when reading image {}. Ignoring it.'.format(p))
+                return None, None, None
 
         labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
         dense_shape = [len(labels_str), max_length]
@@ -165,21 +107,7 @@ class Dataset:
         self.count += batch_size
 
         return images, label_set, seqLengths
-
-    # def check_validity_img(self):
-    #     """
-    #     Loads all images of the dataset and removes the ones that rise errors
-    #     :return:
-    #     """
-    #     print('Checking validity of dataset')
-    #     for p, l in tqdm(zip(self.img_paths_list, self.labels_string_list), total=len(self.img_paths_list)):
-    #         img_path = os.path.abspath(os.path.join(self.datapath, p))
-    #         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    #         if img is None:
-    #             print('Error with image {} : removing from dataset.'.format(p))
-    #             self.img_paths_list.remove(p)
-    #             self.labels_string_list.remove(l)
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 
 
 def verify_list_paths(list_paths, new_filename):
@@ -190,17 +118,24 @@ def verify_list_paths(list_paths, new_filename):
         except FileNotFoundError:
             print('File already deleted')
             continue
-
-        if img is None:
-            print('Error when reading image {}. Removing it.'.format(p))
-        elif not img.data:
+        try:
+            if img is None:
+                print('Error when reading image {}. Removing it.'.format(p))
+            elif not img.data:
+                print('Error when reading image {}. Ignoring it.'.format(p))
+            else:
+                resized = cv2.resize(img, (10, 10), interpolation=cv2.INTER_CUBIC)
+                continue
+        except:
             print('Error when reading image {}. Ignoring it.'.format(p))
-        else:
-            continue
 
-        # If problem delete img from disk and from list
-        updated_list.remove(p)
-        os.remove(p)
+        try:
+            # If problem delete img from disk and from list
+            updated_list.remove(p)
+            os.remove(p)
+        except FileNotFoundError:
+            print('File already deleted')
+            continue
 
     print('Writing updated list of paths in {}'.format(new_filename))
     with open(new_filename, 'w') as handle:
