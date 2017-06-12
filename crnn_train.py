@@ -8,6 +8,7 @@ from model import CRNN, CTC
 from config import Conf
 from dataset import Dataset
 from decoding import simpleDecoder, evaluation_metrics
+import argparse
 
 
 # CONFIG PARAMETERS
@@ -17,26 +18,26 @@ from decoding import simpleDecoder, evaluation_metrics
 config_sess = tf.ConfigProto()
 config_sess.gpu_options.per_process_gpu_memory_fraction = 0.3
 
-config = Conf(n_classes=37,
-              train_batch_size=128,
-              test_batch_size=32,
-              learning_rate=0.001,  # 0.001 for adadelta
-              decay_rate=0.9,
-              max_iteration=3000000,
-              max_epochs=100,
-              eval_interval=200,
-              save_interval=2500,
-              file_writer='../rms_d09',
-              data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
-              model_dir='../model-crnn-rms_d09/',
-              input_shape=[32, 100],
-              list_n_hidden=[256, 256],
-              max_len=24)
+# config = Conf(n_classes=37,
+#               train_batch_size=128,
+#               eval_batch_size=256,
+#               learning_rate=0.01,  # 0.001 for adadelta
+#               decay_rate=0.9,
+#               max_iteration=3000000,
+#               max_epochs=100,
+#               eval_interval=100,
+#               save_interval=2500,
+#               file_writer='../ada_d09-01',
+#               data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
+#               model_dir='../model-crnn-ada_d09-01/',
+#               input_shape=[32, 100],
+#               list_n_hidden=[256, 256],
+#               max_len=24)
 
 session = tf.Session(config=config_sess)
 
 
-def crnn_train(conf=config, sess=session):
+def crnn_train(conf, sess=session):
 
     # PLACEHOLDERS
     # ------------
@@ -54,11 +55,7 @@ def crnn_train(conf=config, sess=session):
 
     # Sequence length
     train_seq_len = [conf.maxLength for _ in range(conf.trainBatchSize)]
-    test_seq_len = [conf.maxLength for _ in range(conf.testBatchSize)]
-
-    # # Evaluation
-    # true_string = tf.placeholder(tf.string, [conf.testBatchSize, None], name='true_label_string')
-    # predicted_string = tf.placeholder(tf.string, [conf.testBatchSize, None], name='predicted_string')
+    test_seq_len = [conf.maxLength for _ in range(conf.evalBatchSize)]
 
     # NETWORK
     # -------
@@ -69,10 +66,17 @@ def crnn_train(conf=config, sess=session):
 
     # Optimizer defintion
     global_step = tf.Variable(0)
-    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, 5000,
+    learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, 10000,
                                                conf.decay_rate, staircase=True)
-    # optimizer = tf.train.AdadeltaOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
-    optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
+    if conf.optimizer == 'ada':
+        optimizer = tf.train.AdadeltaOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
+    elif conf.optimizer == 'adam':
+        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
+    elif conf.optimizer == 'rms':
+        optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
+    else:
+        print('Error, no optimizer. RMS by default.')
+        optimizer = tf.train.RMSPropOptimizer(learning_rate).minimize(ctc.loss, global_step=global_step)
 
     # ERRORS EVALUATION
     # -----------------
@@ -91,10 +95,10 @@ def crnn_train(conf=config, sess=session):
     tf.summary.scalar('accuracy', accuracy)
     # WER
     WER = tf.placeholder(tf.float32, None, name='WER')
-    tf.summary.scalar('WER', WER)
+    tf.summary.scalar('WordER', WER)
     # CER
     CER = tf.placeholder(tf.float32, None, name='CER')
-    tf.summary.scalar('CER', CER)
+    tf.summary.scalar('CharER', CER)
 
     # Summary Writer
     merged = tf.summary.merge_all()
@@ -128,6 +132,9 @@ def crnn_train(conf=config, sess=session):
     while step < conf.maxIteration:
         # Prepare batch and add channel dimension
         images_batch, label_set, seq_len = data_train.nextBatch(conf.trainBatchSize)
+        if images_batch is None:
+            continue
+
         images_batch = np.expand_dims(images_batch, axis=-1)
 
         cost, _, step = sess.run([ctc.cost, optimizer, global_step],
@@ -143,10 +150,10 @@ def crnn_train(conf=config, sess=session):
 
         # Eval accuarcy
         if step != 0 and step % conf.evalInterval == 0:
-            images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch(conf.testBatchSize)
+            images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch(conf.evalBatchSize)
             images_batch_eval = np.expand_dims(images_batch_eval, axis=-1)
 
-            raw_pred = sess.run(crnn.rawPred,
+            cost_eval, raw_pred = sess.run([ctc.cost, crnn.rawPred],
                                 feed_dict={
                                             x: images_batch_eval,
                                             keep_prob: 1.0,
@@ -163,20 +170,19 @@ def crnn_train(conf=config, sess=session):
             # cer = eval_CER(str_pred, label_set_eval[0])
             acc, wer, cer = evaluation_metrics(str_pred, label_set_eval[0])
 
-            print('step: {}, cost: {}, training accuracy: {}, cer: {}'.format(step, cost, acc, cer))
+            print('step: {}, cost: {}, eval accuracy: {}, cer: {}'.format(step, cost_eval, acc, cer))
 
             # for i in range(5):
             #     print('original: {}, predicted(no decode): {}, predicted: {}'.format(label_set_eval[0][i],
             #                                                                          str_pred[i]))
 
-            time_elapse = time.time() - t
             t = time.time()
 
             summary, step = sess.run([merged, global_step],
                                      feed_dict={
                                          x: images_batch,
-                                         keep_prob: 0.7,
-                                         rnn_seq_len: train_seq_len,
+                                         keep_prob: 1.0,
+                                         # rnn_seq_len: train_seq_len,
                                          input_ctc_seq_len: train_seq_len,
                                          target_seq_len: seq_len,
                                          labels: label_set[1],
@@ -197,4 +203,29 @@ def crnn_train(conf=config, sess=session):
 
 
 if __name__ == '__main__':
-    crnn_train()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--learning_rate', type=float, help='Starting learning rate', default=0.001)
+    parser.add_argument('-d', '--decay_rate', type=float, help='Decay rate for learning rate', default=0.9)
+    parser.add_argument('-e', '--eval_interval', type=float, help='Evaluation interval (steps)', default=500)
+    parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (ada or rms)', default='rms')
+
+    args = parser.parse_args()
+
+    config = Conf(n_classes=37,
+                  train_batch_size=128,
+                  eval_batch_size=64,
+                  learning_rate=args.learning_rate,
+                  decay_rate=args.decay_rate,
+                  optimizer=args.optimizer,
+                  max_iteration=3000000,
+                  max_epochs=100,
+                  eval_interval=args.eval_interval,
+                  save_interval=2500,
+                  file_writer='../{}_d{}-l{}'.format(args.optimizer, args.decay_rate, args.learning_rate),
+                  data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
+                  model_dir='../model-crnn-{}_d{}-l{}'.format(args.optimizer, args.decay_rate, args.learning_rate),
+                  input_shape=[32, 100],
+                  list_n_hidden=[256, 256],
+                  max_len=24)
+
+    crnn_train(conf=config)
