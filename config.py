@@ -3,7 +3,7 @@ __author__ = 'solivr'
 
 
 class Conf:
-    def __init__(self, n_classes=None, train_batch_size=100, learning_rate=0.001, decay_rate=0.96,
+    def __init__(self, n_classes=None, train_batch_size=100, learning_rate=0.001, decay_rate=0.96, optimizer='rms',
                  eval_batch_size=200, max_iteration=10000, max_epochs=50, eval_interval=100,
                  save_interval=1000, file_writer=None, model_dir=None, data_set='../data', max_len=28,
                  input_shape=[32, 100], list_n_hidden=[256, 256], summary_dir='./graph'):
@@ -11,6 +11,7 @@ class Conf:
         self.trainBatchSize = train_batch_size
         self.learning_rate = learning_rate
         self.decay_rate = decay_rate
+        self.optimizer= optimizer
         self.evalBatchSize = eval_batch_size
         self.maxIteration = max_iteration
         self.maxEpochs = max_epochs
@@ -29,26 +30,3 @@ class Conf:
             self.imgC = 1
         self.listNHidden = list_n_hidden
         self.summaryDir = summary_dir
-
-
-# class Config:
-#     def __init__(self):
-#         self.nClasses = 36
-#         self.trainBatchSize = 64
-#         self.evalBatchSize = 200
-#         self.testBatchSize = 10
-#         self.maxIteration = 2000000
-#         self.displayInterval = 1
-#         self.evalInterval = 10
-#         self.testInterval = 20
-#         self.saveInterval = 50000
-#         self.modelDir = os.path.abspath(os.path.join('..', 'model', 'ckpt'))
-#         # self.dataSet = os.path.join('..', 'data', 'Synth')
-#         # self.auxDataSet = os.path.join('..', 'data', 'aux_Synth')
-#         self.dataSet = os.path.join('..', 'data', 'IIIT5K')
-#         self.maxLength = 24
-#         self.trainLogPath = os.path.abspath(os.path.join('..', 'model', 'log'))
-#
-#         self.input_shape = [32, 100]
-#         self.list_n_hidden = [256, 256]
-
