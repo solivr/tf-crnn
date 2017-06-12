@@ -150,7 +150,7 @@ def crnn_train(conf, sess=session):
 
         # Eval accuarcy
         if step != 0 and step % conf.evalInterval == 0:
-            images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch(conf.evalBatchSize)
+            images_batch_eval, label_set_eval, seq_len_eval = data_test.nextBatch()
             images_batch_eval = np.expand_dims(images_batch_eval, axis=-1)
 
             cost_eval, raw_pred = sess.run([ctc.cost, crnn.rawPred],
@@ -214,7 +214,7 @@ if __name__ == '__main__':
 
     config = Conf(n_classes=37,
                   train_batch_size=128,
-                  eval_batch_size=64,
+                  # eval_batch_size=64,
                   learning_rate=args.learning_rate,
                   decay_rate=args.decay_rate,
                   decay_steps=args.decay_steps,

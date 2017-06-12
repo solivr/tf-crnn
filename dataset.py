@@ -7,26 +7,11 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 from itertools import cycle
-from decoding import str2int_label
+from .decoding import str2int_label
 
 
 def load_paths_labels(path, file_split):
     filename = os.path.join(path, file_split)
-    # with open(os.path.join(path, file_split), 'r') as f:
-    #     lines = f.readlines()
-    # with open(os.path.join(path, 'lexicon.txt'), 'r') as f:
-    #     lexicon = f.readlines()
-    #
-    # # Split lines into path and label
-    # linesplit = [l[:-1].split(' ') for l in lines]
-    #
-    # label_index = [int(s[1]) for s in linesplit]
-    # img_paths = [s[0] for s in linesplit]
-    #
-    # labels_string = [lexicon[ind][:-1] for ind in label_index]
-    #
-    # return img_paths, labels_string
-
     root = os.path.split(filename)[0]
 
     with open(filename, 'r') as f:
@@ -65,7 +50,7 @@ class Dataset:
 
         return cycle(iter(img_paths_list)), cycle(iter(labels_string_list))
 
-    def nextBatch(self, batch_size):
+    def nextBatch(self, batch_size=None):
         """
 
         :param batch_size:
@@ -73,6 +58,8 @@ class Dataset:
                  label_set : tuple (sparse tensor, list string labels)
                  seqLength : length of the sequence
         """
+        if batch_size is None:
+            batch_size = self.nSamples
 
         images = list()
         labels_int = list()  # ascii-like code
