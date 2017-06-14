@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 from itertools import cycle
-from .decoding import str2int_label
+from decoding import str2int_label
 
 
 def load_paths_labels(path, file_split):
