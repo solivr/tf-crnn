@@ -22,7 +22,7 @@ class Model:
 # ----------------------------------------------------------
 
 
-def weightVar(shape, mean=0.0, stddev=0.1, name='weights'):
+def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
     initW = tf.truncated_normal(shape=shape, mean=mean, stddev=stddev)
     return tf.Variable(initW, name=name)
 
