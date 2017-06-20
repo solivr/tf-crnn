@@ -4,10 +4,10 @@ __author__ = 'solivr'
 import tensorflow as tf
 import numpy as np
 import time
-from model import CRNN, CTC
-from config import Conf
-from dataset import Dataset
-from decoding import simpleDecoder, evaluation_metrics
+from crnn.model import CRNN, CTC
+from crnn.config import Conf
+from crnn.dataset import Dataset
+from crnn.decoding import simpleDecoder, evaluation_metrics
 import argparse
 import os
 
@@ -59,7 +59,7 @@ def crnn_train(conf, sess):
     ctc = CTC(crnn.prob, labels, target_seq_len, inputSeqLength=input_ctc_seq_len)
 
     # Optimizer defintion
-    global_step = tf.Variable(0)
+    global_step = tf.Variable(0, name='global_step')
     learning_rate = tf.train.exponential_decay(conf.learning_rate, global_step, conf.decay_steps,
                                                conf.decay_rate, staircase=True)
 

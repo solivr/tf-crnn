@@ -7,10 +7,11 @@ from tensorflow.contrib.rnn import BasicLSTMCell
 import warpctc_tensorflow
 import cv2
 import numpy as np
-from crnn.decoding import str2int_label
+import os
+from crnn.decoding import simpleDecoder, eval_accuracy, eval_CER
 
 
-def weightVar(shape, mean=0.0, stddev=0.1, name='weights'):
+def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
     initW = tf.truncated_normal(shape=shape, mean=mean, stddev=stddev)
     return tf.Variable(initW, name=name)
 
@@ -24,11 +25,7 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
     return tf.nn.conv2d(input, filter, strides=strides, padding=padding, name=name)
 
 
-def deep_cnn(inputImgs, isTraining) -> tf.Tensor:
-    # if params['input_shape']:
-    #     # resize image to have h x w
-    #     input_tensor = tf.image.resize_images(inputImgs, params['input_shape'])
-    # else:
+def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
     input_tensor = inputImgs
 
     # Following source code, not paper
@@ -154,7 +151,7 @@ def deep_cnn(inputImgs, isTraining) -> tf.Tensor:
     return conv_reshaped
 
 
-def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
+def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
     # Prepare data shape to match `bidirectional_rnn` function requirements
     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
 
@@ -204,91 +201,56 @@ def deep_bidirectional_lstm(inputs, params) -> tf.Tensor:
         return lstm_out, rawPred
 
 
-# def load_batch(list_paths, list_labels, input_shape):
-#     """
-#     Load all the images and
-#     :param paths:
-#     :return:
-#     """
-#     try:
-#         iW, iH = input_shape
-#     except ValueError:
-#         print('Image should be grayscale : input_size = W x H')
-#         return None
-#
-#     images = list()
-#     labels_int = list()
-#     # seq_lengths = list()
-#     max_length = 0
-#
-#     for path, label in zip(list_paths, list_labels):
-#         try:
-#             img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-#         except FileNotFoundError:
-#             print('{} not found'.format(path))
-#             return None
-#
-#         resized = cv2.resize(img, (iW, iH), interpolation=cv2.INTER_CUBIC)
-#         images.append(resized)
-#
-#         labels_int.append(str2int_label(label))
-#         # seq_lengths.append(len(label))
-#         # if len(label) > max_length:
-#         #     max_length = len(label)
-#
-#     labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
-#     dense_shape = [len(list_labels), max_length]
-#     label_set = (list_labels, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
-#
-#     images = np.asarray(images)
-#
-#     return images, label_set #, seq_lengths
+def csv_loader(csv_filename, batch_size):
 
-def load_batch(list_paths : tf.Tensor, list_labels : tf.Tensor, input_shape):
-    """
-    Load all the images and
-    :param paths:
-    :return:
-    """
-    try:
-        iW, iH = input_shape
-    except ValueError:
-        print('Image should be grayscale : input_size = W x H')
-        return None
+    # Choose case one csv file or list of csv files
+    if not isinstance(csv_filename, list):
+        dirname = os.path.dirname(csv_filename)
+        filename_queue = tf.train.string_input_producer([csv_filename])
+    elif isinstance(csv_filename, list):
+        dirname = os.path.dirname(csv_filename[0])
+        filename_queue = tf.train.string_input_producer(csv_filename)
 
-    images = list()
-    labels_int = list()
-    # seq_lengths = list()
-    max_length = 0
+    reader = tf.TextLineReader(name='CSV_Reader')
+    key, value = reader.read(filename_queue, name='file_reading_op')
 
-    for path, label in zip(list_paths, list_labels):
-        try:
-            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        except FileNotFoundError:
-            print('{} not found'.format(path))
-            return None
+    default_line = [['None'], ['None']]
+    path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
 
-        resized = cv2.resize(img, (iW, iH), interpolation=cv2.INTER_CUBIC)
-        images.append(resized)
+    # Get full path
+    full_dir = tf.constant([os.path.abspath(os.path.join(dirname, '..'))], tf.string)
+    full_path = tf.string_join([full_dir, path], separator=os.path.sep)
 
-        labels_int.append(str2int_label(label))
-        # seq_lengths.append(len(label))
-        # if len(label) > max_length:
-        #     max_length = len(label)
+    # Read image
+    image_content = tf.read_file(full_path, name='image_reader')
+    image = tf.decode_image(image_content, channels=1)
 
-    labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
-    dense_shape = [len(list_labels), max_length]
-    label_set = (list_labels, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
+    # Batch
+    img_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size,
+                                                    min_after_dequeue=2000, capacity=3000)
+    # Data augmentation
+    # TODO
 
-    images = np.asarray(images)
+    # Alphabet and codes
+    alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
+    keys = [c for c in alphabet]
+    values = list(range(36)) + list(range(10, 37))
 
-    return images, label_set #, seq_lengths
+    # Convert string to code
+    table = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
+    splited = tf.string_split(label, delimiter='')
+    codes = table.lookup(splited.values)
+    sparse_code = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
+
+    sequence_lengths = tf.segment_max(sparse_code.indices[:, 1], sparse_code.indices[:, 0]) + 1
+
+    return image, label, sparse_code, sequence_lengths
 
 
 def crnn_fn(features, targets, mode, params):
     """
     :param features: dict {
-                            'input_paths'
+                            'images'
                             'rnn_seq_length'
                             'target_seq_length' }
     :param targets: labels. flattend (1D) array with encoded label (one code per character)
@@ -297,6 +259,7 @@ def crnn_fn(features, targets, mode, params):
                             'input_shape'
                             'keep_prob'
                             'starting_learning_rate'
+                            'optimizer'
                             'decay_steps'
                             'decay_rate' }
     :return:
@@ -308,11 +271,8 @@ def crnn_fn(features, targets, mode, params):
         isTraining = False
         params['keep_prob'] = 1.0
 
-    # Load images and format labels
-    images, label_set = load_batch(features['input_paths'], targets, params['input_shape'])
-
-    conv = deep_cnn(images, isTraining)  # params : input_shape
-    prob, raw_pred = deep_bidirectional_lstm(conv, params)  # params: rnn_seq_length, keep_prob
+    conv = deep_cnn(features['images'], isTraining)
+    prob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
     predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
 
     # Loss
@@ -322,39 +282,36 @@ def crnn_fn(features, targets, mode, params):
                                       input_lengths=features['rnn_seq_length'],
                                       blank_label=36)
 
-    # # Computing WER
-    # str_pred_orginal = params['str_labels']
-    # str_pred_blank = simpleDecoderWithBlank(raw_pred)
-    # str_pred = simpleDecoder(raw_pred)
-    #
-    # eval_metric_ops = {
-    #     'WER': eval_accuracy(str_pred, str_pred_orginal)
-    # }
-
+    # Train op
     global_step = tf.Variable(0)
     learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
                                                params['decay_rate'], staircase=True)
-    train_op = tf.train.RMSPropOptimizer(learning_rate).minimize(loss_ctc, global_step=global_step)
 
+    if params['optimizer'] == 'ada':
+        optimizer = tf.train.AdadeltaOptimizer(learning_rate)
+    elif params['optimizer'] == 'adam':
+        optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
+    elif params['optimizer'] == 'rms':
+        optimizer = tf.train.RMSPropOptimizer(learning_rate)
+    else:
+        print('Error, no optimizer. RMS by default.')
+        optimizer = tf.train.RMSPropOptimizer(learning_rate)
+
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        train_op = optimizer.minimize(loss_ctc, global_step=global_step)
+
+    # Evaluation ops
+    str_pred = simpleDecoder(predictions_dict['raw_predictions'].eval())
+
+    eval_metric_ops = {'accuracy': eval_accuracy(str_pred, targets.eval()),
+                       'cer': eval_CER(str_pred, targets.eval())}
+
+    # Output
     return model_fn_lib.ModelFnOps(
         mode=mode,
         predictions=predictions_dict,
         loss=loss_ctc,
         train_op=train_op,
-        # eval_metric_ops=eval_metric_ops
+        eval_metric_ops=eval_metric_ops
     )
-
-
-# # MODEL FUNCTION
-# def model_fn(features, targets, mode, params):
-#     """# Logic to do the following:
-#     # 1. Configure the model via TensorFlow operations
-#     # 2. Define the loss function for training/evaluation
-#     # 3. Define the training operation/optimizer
-#     # 4. Generate predictions
-#     # 5. Return predictions/loss/train_op/eval_metric_ops in ModelFnOps object"""
-#
-#     predictions  # dict e.g. predictions = {"results": tensor_of_predictions}
-#     eval_metric_ops  # dict e.g. eval_metric_ops = { "accuracy": tf.metrics.accuracy(labels, predictions) }
-#
-#     return ModelFnOps(mode, predictions, loss, train_op, eval_metric_ops)

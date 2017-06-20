@@ -2,12 +2,11 @@
 __author__ = 'solivr'
 
 import os
-import sys
 import numpy as np
 import cv2
 from tqdm import tqdm
 from itertools import cycle
-from decoding import str2int_label
+from crnn.decoding import str2int_label
 
 
 def load_paths_labels(path, file_split):
@@ -88,7 +87,7 @@ class Dataset:
 
         labels_flatten = np.array([char_code for word in labels_int for char_code in word], dtype=np.int32)
         dense_shape = [len(labels_str), max_length]
-        label_set = (labels_str, labels_flatten, dense_shape)  # strings, flattened code_label,[n_labels, max_length]
+        label_set = (labels_str, labels_flatten, dense_shape)  # strings, flattened code_label, [n_labels, max_length]
 
         images = np.asarray(images)
         self.count += batch_size
