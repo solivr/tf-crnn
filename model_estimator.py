@@ -193,7 +193,6 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
         lstm_out = tf.reshape(fc_out, [-1, shape[1], nClasses], name='reshape_out')  # [batch, width, n_classes]
 
         rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
-        # tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
 
         # Swap batch and time axis
         lstm_out = tf.transpose(lstm_out, [1, 0, 2], name='transpose_time_major')  # [width(time), batch, n_classes]
@@ -201,59 +200,56 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
         return lstm_out, rawPred
 
 
-def csv_loader(csv_filename, batch_size):
+def data_loader(csv_filename, batch_size: int, input_shape=[32, 100]):
 
-    # Choose case one csv file or list of csv files
-    if not isinstance(csv_filename, list):
-        dirname = os.path.dirname(csv_filename)
-        filename_queue = tf.train.string_input_producer([csv_filename])
-    elif isinstance(csv_filename, list):
-        dirname = os.path.dirname(csv_filename[0])
-        filename_queue = tf.train.string_input_producer(csv_filename)
+    def input_fn():
+        # Choose case one csv file or list of csv files
+        if not isinstance(csv_filename, list):
+            dirname = os.path.dirname(csv_filename)
+            filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=50)
+        elif isinstance(csv_filename, list):
+            dirname = os.path.dirname(csv_filename[0])
+            filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=50)
+        else:
+            raise TypeError
 
-    reader = tf.TextLineReader(name='CSV_Reader')
-    key, value = reader.read(filename_queue, name='file_reading_op')
+        reader = tf.TextLineReader(name='CSV_Reader')
+        key, value = reader.read(filename_queue, name='file_reading_op')
 
-    default_line = [['None'], ['None']]
-    path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
+        default_line = [['None'], ['None']]
+        path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
 
-    # Get full path
-    full_dir = tf.constant([os.path.abspath(os.path.join(dirname, '..'))], tf.string)
-    full_path = tf.string_join([full_dir, path], separator=os.path.sep)
+        # Shuffle queue -> batch of 1 (allowing to use batch with dynamic pad after)
 
-    # Read image
-    image_content = tf.read_file(full_path, name='image_reader')
-    image = tf.decode_image(image_content, channels=1)
+        # Get full path
+        full_dir = tf.constant([os.path.abspath(os.path.join(dirname, '..'))], tf.string)
+        full_path = tf.string_join([full_dir, path], separator=os.path.sep)
 
-    # Batch
-    img_batch, label_batch = tf.train.shuffle_batch([image, label], batch_size=batch_size,
-                                                    min_after_dequeue=2000, capacity=3000)
-    # Data augmentation
-    # TODO
+        # Read image
+        image_content = tf.read_file(full_path, name='image_reader')
+        image = tf.image.decode_image(image_content, channels=1)
+        # Reshape
+        image = tf.image.resize_images(image, size=input_shape, method=tf.image.ResizeMethod.BICUBIC)
 
-    # Alphabet and codes
-    alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
-    keys = [c for c in alphabet]
-    values = list(range(36)) + list(range(10, 37))
+        # Data augmentation
+        # TODO
 
-    # Convert string to code
-    table = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
-    splited = tf.string_split(label, delimiter='')
-    codes = table.lookup(splited.values)
-    sparse_code = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
+        # Batch
+        img_batch, label_batch = tf.train.batch([image, label], batch_size=batch_size, num_threads=15,
+                                                capacity=3000, dynamic_pad=False)
 
-    sequence_lengths = tf.segment_max(sparse_code.indices[:, 1], sparse_code.indices[:, 0]) + 1
+        return {'images': img_batch}, label_batch  # features = {img_batch, image width (rnn_seq_length)}
 
-    return image, label, sparse_code, sequence_lengths
+    return input_fn
 
 
-def crnn_fn(features, targets, mode, params):
+def crnn_fn(features, labels, mode, params):
     """
     :param features: dict {
                             'images'
                             'rnn_seq_length'
                             'target_seq_length' }
-    :param targets: labels. flattend (1D) array with encoded label (one code per character)
+    :param labels: labels. flattend (1D) array with encoded label (one code per character)
     :param mode:
     :param params: dict {
                             'input_shape'
@@ -261,7 +257,8 @@ def crnn_fn(features, targets, mode, params):
                             'starting_learning_rate'
                             'optimizer'
                             'decay_steps'
-                            'decay_rate' }
+                            'decay_rate'
+                            'max_length'}
     :return:
     """
     if mode == 'train':
@@ -271,21 +268,37 @@ def crnn_fn(features, targets, mode, params):
         isTraining = False
         params['keep_prob'] = 1.0
 
+    # Alphabet and codes
+    alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
+    keys = [c for c in alphabet]
+    values = list(range(36)) + list(range(10, 37))
+
+    # Convert string to code
+    table = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
+    splited = tf.string_split(labels, delimiter='')
+    codes = table.lookup(splited.values)
+    sparse_code = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
+
+    sequence_lengths = tf.segment_max(sparse_code.indices[:, 1], sparse_code.indices[:, 0]) + 1
+
     conv = deep_cnn(features['images'], isTraining)
     prob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
     predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
 
     # Loss
     loss_ctc = warpctc_tensorflow.ctc(activations=prob,
-                                      flat_labels=targets,
-                                      label_lengths=features['target_seq_length'],
-                                      input_lengths=features['rnn_seq_length'],
+                                      flat_labels=sparse_code.values,
+                                      label_lengths=tf.cast(sequence_lengths, tf.int32),
+                                      input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32) * params['max_length'],
                                       blank_label=36)
+    loss_ctc = tf.reduce_mean(loss_ctc)
 
     # Train op
-    global_step = tf.Variable(0)
+    global_step = tf.train.get_or_create_global_step()
     learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
                                                params['decay_rate'], staircase=True)
+
+    tf.summary.scalar('learning_rate', learning_rate)
 
     if params['optimizer'] == 'ada':
         optimizer = tf.train.AdadeltaOptimizer(learning_rate)
@@ -302,10 +315,10 @@ def crnn_fn(features, targets, mode, params):
         train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
     # Evaluation ops
-    str_pred = simpleDecoder(predictions_dict['raw_predictions'].eval())
-
-    eval_metric_ops = {'accuracy': eval_accuracy(str_pred, targets.eval()),
-                       'cer': eval_CER(str_pred, targets.eval())}
+    # str_pred = simpleDecoder(predictions_dict['raw_predictions'].eval())
+    #
+    # eval_metric_ops = {'accuracy': eval_accuracy(str_pred, targets.eval()),
+    #                    'cer': eval_CER(str_pred, targets.eval())}
 
     # Output
     return model_fn_lib.ModelFnOps(
@@ -313,5 +326,5 @@ def crnn_fn(features, targets, mode, params):
         predictions=predictions_dict,
         loss=loss_ctc,
         train_op=train_op,
-        eval_metric_ops=eval_metric_ops
+        # eval_metric_ops=eval_metric_ops
     )
