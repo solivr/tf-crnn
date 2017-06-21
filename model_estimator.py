@@ -8,7 +8,7 @@ import warpctc_tensorflow
 import cv2
 import numpy as np
 import os
-from crnn.decoding import simpleDecoder, eval_accuracy, eval_CER
+from crnn.decoding import get_words_from_chars
 
 
 def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
@@ -167,8 +167,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
         lstm_net, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
                                                                         bw_cell_list,
                                                                         inputs,
-                                                                        dtype=tf.float32,
-                                                                        # sequence_length=params['rnn_seq_lengths']
+                                                                        dtype=tf.float32
                                                                         )
 
         # Dropout layer
@@ -222,12 +221,13 @@ def data_loader(csv_filename, batch_size: int, input_shape=[32, 100]):
         # Shuffle queue -> batch of 1 (allowing to use batch with dynamic pad after)
 
         # Get full path
-        full_dir = tf.constant([os.path.abspath(os.path.join(dirname, '..'))], tf.string)
+        # full_dir = tf.constant([os.path.abspath(os.path.join(dirname, '..'))], tf.string)
+        full_dir = dirname
         full_path = tf.string_join([full_dir, path], separator=os.path.sep)
 
         # Read image
         image_content = tf.read_file(full_path, name='image_reader')
-        image = tf.image.decode_image(image_content, channels=1)
+        image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
         # Reshape
         image = tf.image.resize_images(image, size=input_shape, method=tf.image.ResizeMethod.BICUBIC)
 
@@ -274,12 +274,12 @@ def crnn_fn(features, labels, mode, params):
     values = list(range(36)) + list(range(10, 37))
 
     # Convert string to code
-    table = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
+    table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
     splited = tf.string_split(labels, delimiter='')
-    codes = table.lookup(splited.values)
-    sparse_code = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
+    codes = table_str2int.lookup(splited.values)
+    sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
 
-    sequence_lengths = tf.segment_max(sparse_code.indices[:, 1], sparse_code.indices[:, 0]) + 1
+    sequence_lengths = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
 
     conv = deep_cnn(features['images'], isTraining)
     prob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
@@ -287,9 +287,9 @@ def crnn_fn(features, labels, mode, params):
 
     # Loss
     loss_ctc = warpctc_tensorflow.ctc(activations=prob,
-                                      flat_labels=sparse_code.values,
+                                      flat_labels=sparse_code_target.values,
                                       label_lengths=tf.cast(sequence_lengths, tf.int32),
-                                      input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32) * params['max_length'],
+                                      input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32)*params['max_length'],
                                       blank_label=36)
     loss_ctc = tf.reduce_mean(loss_ctc)
 
@@ -315,10 +315,31 @@ def crnn_fn(features, labels, mode, params):
         train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
     # Evaluation ops
-    # str_pred = simpleDecoder(predictions_dict['raw_predictions'].eval())
-    #
-    # eval_metric_ops = {'accuracy': eval_accuracy(str_pred, targets.eval()),
-    #                    'cer': eval_CER(str_pred, targets.eval())}
+
+    # Convert code labels to string labels
+    keys = np.arange(37, dtype=np.int64)
+    alphabet_short = '0123456789abcdefghijklmnopqrstuvwxyz-'
+    values = [c for c in alphabet_short]
+    table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
+
+    (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
+                                                                   tf.ones([tf.shape(labels)[0]],
+                                                                           dtype=tf.int32) * params['max_length'],
+                                                                   merge_repeated=True)
+    # sparse_code_pred = tf.cast(sparse_code_pred, dtype=tf.int64)
+
+    sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
+
+    pred_chars = table_int2str.lookup(sparse_code_pred)
+    predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
+
+    CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
+    WER = tf.metrics.accuracy(labels, predictions_dict['words'])
+
+    eval_metric_ops = {'WER': WER,
+                       'accuracy': 1 - WER[0],
+                       'CER': CER,
+                       'loss': loss_ctc}
 
     # Output
     return model_fn_lib.ModelFnOps(
@@ -326,5 +347,5 @@ def crnn_fn(features, labels, mode, params):
         predictions=predictions_dict,
         loss=loss_ctc,
         train_op=train_op,
-        # eval_metric_ops=eval_metric_ops
+        eval_metric_ops=eval_metric_ops
     )
