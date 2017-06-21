@@ -222,7 +222,7 @@ class CRNN():
             lstm_out = tf.reshape(fc_out, [-1, shape[1], self.config.nClasses], name='reshape_out')
 
             self.rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
-            tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
+            # tf.summary.tensor_summary('raw_preds', tf.nn.softmax(lstm_out))
 
             # Swap batch and time axis
             lstm_out = tf.transpose(lstm_out, [1, 0, 2], name='transpose_time_major')  # [width(time), batch, n_classes]
