@@ -199,16 +199,16 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
         return lstm_out, rawPred
 
 
-def data_loader(csv_filename, batch_size: int, input_shape=[32, 100]):
+def data_loader(csv_filename, batch_size: int, input_shape=[32, 100], num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
         if not isinstance(csv_filename, list):
             dirname = os.path.dirname(csv_filename)
-            filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=50)
+            filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=num_epochs)
         elif isinstance(csv_filename, list):
             dirname = os.path.dirname(csv_filename[0])
-            filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=50)
+            filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs)
         else:
             raise TypeError
 
@@ -293,12 +293,19 @@ def crnn_fn(features, labels, mode, params):
                                       blank_label=36)
     loss_ctc = tf.reduce_mean(loss_ctc)
 
+    # Create an ExponentialMovingAverage object
+    ema = tf.train.ExponentialMovingAverage(decay=0.99)
+    # Create the shadow variables, and add ops to maintain moving averages
+    maintain_averages_op = ema.apply([loss_ctc])
+    loss_ema = ema.average(loss_ctc)
+
     # Train op
     global_step = tf.train.get_or_create_global_step()
     learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
                                                params['decay_rate'], staircase=True)
 
     tf.summary.scalar('learning_rate', learning_rate)
+    tf.summary.scalar('ema_loss', loss_ema)
 
     if params['optimizer'] == 'ada':
         optimizer = tf.train.AdadeltaOptimizer(learning_rate)
@@ -311,7 +318,7 @@ def crnn_fn(features, labels, mode, params):
         optimizer = tf.train.RMSPropOptimizer(learning_rate)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    with tf.control_dependencies(update_ops):
+    with tf.control_dependencies(update_ops + [maintain_averages_op]):
         train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
     # Evaluation ops
@@ -334,10 +341,10 @@ def crnn_fn(features, labels, mode, params):
     predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
 
     CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
-    WER = tf.metrics.accuracy(labels, predictions_dict['words'])
+    accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
 
-    eval_metric_ops = {'WER': WER,
-                       'accuracy': 1 - WER[0],
+    eval_metric_ops = {'WER': 1 - accuracy[0],
+                       'accuracy': accuracy,
                        'CER': CER,
                        'loss': loss_ctc}
 
