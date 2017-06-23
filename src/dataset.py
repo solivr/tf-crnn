@@ -2,11 +2,13 @@
 __author__ = 'solivr'
 
 import os
-import numpy as np
-import cv2
-from tqdm import tqdm
 from itertools import cycle
-from crnn.decoding import str2int_label
+
+import cv2
+import numpy as np
+from tqdm import tqdm
+
+from crnn.src.decoding import str2int_label
 
 
 def load_paths_labels(path, file_split):

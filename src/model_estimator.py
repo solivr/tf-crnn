@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
 
-import tensorflow as tf
-from tensorflow.contrib.learn.python.learn.estimators import model_fn as model_fn_lib
-from tensorflow.contrib.rnn import BasicLSTMCell
-import warpctc_tensorflow
-import cv2
-import numpy as np
 import os
-from crnn.decoding import get_words_from_chars
+
+import numpy as np
+import tensorflow as tf
+import warpctc_tensorflow
+from tensorflow.contrib.rnn import BasicLSTMCell
+
+from crnn.src.decoding import get_words_from_chars
 
 
 def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
