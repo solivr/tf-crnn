@@ -7,9 +7,9 @@ import time
 
 import numpy as np
 import tensorflow as tf
-from crnn.config import Conf
-from crnn.decoding import simpleDecoder, evaluation_metrics
-from crnn.model import CRNN, CTC
+from crnn.src.config import Conf
+from crnn.src.decoding import simpleDecoder, evaluation_metrics
+from crnn.src.model import CRNN, CTC
 
 from crnn.src.dataset import Dataset
 
