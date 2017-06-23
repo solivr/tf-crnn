@@ -5,7 +5,7 @@ import argparse
 import os
 
 import tensorflow as tf
-from crnn.model_estimator import crnn_fn, data_loader
+from crnn.src.model_estimator import crnn_fn, data_loader
 
 from crnn.src.config import Conf
 
