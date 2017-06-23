@@ -53,13 +53,16 @@ if __name__ == '__main__':
                                        # config=
                                        )
 
-    if args.isTraining:
-        estimator.train(input_fn=data_loader(filename_train, 128, num_epochs=20))
-    else:
-        estimator.evaluate(input_fn=data_loader(filename_eval, 128, num_epochs=1))
+    # if args.isTraining:
+    #     estimator.train(input_fn=data_loader(filename_train, 128, num_epochs=20))
+    # else:
+    #     estimator.evaluate(input_fn=data_loader(filename_eval, 128, num_epochs=1))
 
-    # while True:
-    #     # Train for 10K steps and then evaluate
-    #     estimator.train(input_fn=data_loader(filename_train, 128, num_epochs=20), steps=10e3)
-    #
-    #     estimator.evaluate(input_fn=data_loader(filename_eval, 2000), steps=10)
+    try:
+        while True:
+            # Train for 10K steps and then evaluate
+            estimator.train(input_fn=data_loader(filename_train, 128, num_epochs=20), steps=10e3)
+
+            estimator.evaluate(input_fn=data_loader(filename_eval, 2000), steps=3)
+    except KeyboardInterrupt:
+        print('Interrupted')
