@@ -182,6 +182,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
             b = biasVar([nClasses])
             fc_out = tf.nn.bias_add(tf.matmul(rnn_reshaped, W), b)
 
+            # Summaries
             weights = [var for var in tf.global_variables()
                        if var.name == 'deep_bidirectional_lstm/fully_connected/weights:0'][0]
             tf.summary.histogram('weights', weights)
@@ -270,8 +271,9 @@ def crnn_fn(features, labels, mode, params):
 
     # Alphabet and codes
     alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
+    blank_label_code = 36
     keys = [c for c in alphabet]
-    values = list(range(36)) + list(range(10, 37))
+    values = list(range(blank_label_code)) + list(range(10, blank_label_code + 1))
 
     # Convert string to code
     table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
@@ -282,16 +284,25 @@ def crnn_fn(features, labels, mode, params):
     sequence_lengths = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
 
     conv = deep_cnn(features['images'], isTraining)
-    prob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
-    predictions_dict = {'prob': prob, 'raw_predictions': raw_pred}
+    logprob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
+    predictions_dict = {'prob': logprob, 'raw_predictions': raw_pred}
 
     # Loss
-    loss_ctc = warpctc_tensorflow.ctc(activations=prob,
+    loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
                                       flat_labels=sparse_code_target.values,
                                       label_lengths=tf.cast(sequence_lengths, tf.int32),
                                       input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32)*params['max_length'],
-                                      blank_label=36)
+                                      blank_label=blank_label_code)
     loss_ctc = tf.reduce_mean(loss_ctc)
+
+    # loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
+    #                           inputs=predictions_dict['prob'],
+    #                           sequence_length=tf.cast(sequence_lengths, tf.int32),
+    #                           preprocess_collapse_repeated=False,
+    #                           ctc_merge_repeated=True,
+    #                           ignore_longer_outputs_than_inputs=False,
+    #                           time_major=True)
+    # loss_ctc = tf.reduce_mean(loss_ctc)
 
     # Create an ExponentialMovingAverage object
     ema = tf.train.ExponentialMovingAverage(decay=0.99)
@@ -333,7 +344,6 @@ def crnn_fn(features, labels, mode, params):
                                                                    tf.ones([tf.shape(labels)[0]],
                                                                            dtype=tf.int32) * params['max_length'],
                                                                    merge_repeated=True)
-    # sparse_code_pred = tf.cast(sparse_code_pred, dtype=tf.int64)
 
     sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
 
