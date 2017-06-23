@@ -353,13 +353,21 @@ def crnn_fn(features, labels, mode, params):
     CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
     accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
 
-    eval_metric_ops = {'WER': 1 - accuracy[0],
+    eval_metric_ops = {# 'WER': 1 - accuracy[0],
                        'accuracy': accuracy,
                        'CER': CER,
-                       'loss': loss_ctc}
+                       #'loss': loss_ctc
+                       }
 
     # Output
-    return model_fn_lib.ModelFnOps(
+    # return model_fn_lib.ModelFnOps(
+    #     mode=mode,
+    #     predictions=predictions_dict,
+    #     loss=loss_ctc,
+    #     train_op=train_op,
+    #     eval_metric_ops=eval_metric_ops
+    # )
+    return tf.estimator.EstimatorSpec(
         mode=mode,
         predictions=predictions_dict,
         loss=loss_ctc,
