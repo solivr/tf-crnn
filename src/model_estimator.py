@@ -8,7 +8,7 @@ import tensorflow as tf
 import warpctc_tensorflow
 from tensorflow.contrib.rnn import BasicLSTMCell
 
-from crnn.src.decoding import get_words_from_chars
+from .decoding import get_words_from_chars
 
 
 def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
@@ -200,7 +200,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
         return lstm_out, rawPred
 
 
-def data_loader(csv_filename, batch_size: int, input_shape=[32, 100], num_epochs=None):
+def data_loader(csv_filename, batch_size=128, input_shape=[32, 100], num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -226,9 +226,17 @@ def data_loader(csv_filename, batch_size: int, input_shape=[32, 100], num_epochs
         full_dir = dirname
         full_path = tf.string_join([full_dir, path], separator=os.path.sep)
 
+        # Get extension of image (png or jpg)
+
+
         # Read image
         image_content = tf.read_file(full_path, name='image_reader')
-        image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
+        # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
+        image = tf.image.decode_png(image_content, channels=1)
+
+        # image = tf.cond(tf.equal(tf.string_split([full_path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
+        #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
+        #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
         # Reshape
         image = tf.image.resize_images(image, size=input_shape, method=tf.image.ResizeMethod.BICUBIC)
 
@@ -236,12 +244,51 @@ def data_loader(csv_filename, batch_size: int, input_shape=[32, 100], num_epochs
         # TODO
 
         # Batch
-        img_batch, label_batch = tf.train.batch([image, label], batch_size=batch_size, num_threads=15,
+        img_batch, label_batch, filenames_batch = tf.train.batch([image, label, full_path], batch_size=batch_size, num_threads=15,
                                                 capacity=3000, dynamic_pad=False)
 
-        return {'images': img_batch}, label_batch  # features = {img_batch, image width (rnn_seq_length)}
+        return {'images': img_batch, 'filenames' : filenames_batch}, label_batch
+        # features = {img_batch, image width (rnn_seq_length)}
 
     return input_fn
+
+
+def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=[32, 100], num_epochs=None):
+
+    def input_fn():
+        # Choose case one csv file or list of csv files
+        if not isinstance(list_filenames, list):
+            filename_queue = tf.train.string_input_producer([list_filenames], num_epochs=num_epochs)
+        elif isinstance(list_filenames, list):
+            filename_queue = tf.train.string_input_producer(list_filenames, num_epochs=num_epochs)
+        else:
+            raise TypeError
+
+        full_path = filename_queue.dequeue()
+
+        # Read image
+        image_content = tf.read_file(full_path, name='image_reader')
+        # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
+        image = tf.image.decode_png(image_content, channels=1)
+
+        # image = tf.cond(tf.equal(tf.string_split([full_path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
+        #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
+        #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
+        # Reshape
+        image = tf.image.resize_images(image, size=input_shape, method=tf.image.ResizeMethod.BICUBIC)
+
+        # Data augmentation
+        # TODO
+
+        # Batch
+        img_batch, filenames_batch = tf.train.batch([image, full_path], batch_size=batch_size, num_threads=15,
+                                                    capacity=3000, dynamic_pad=False, allow_smaller_final_batch=True)
+
+        return {'images': img_batch, 'filenames': filenames_batch}
+        # features = {img_batch, image width (rnn_seq_length)}
+
+    return input_fn
+
 
 
 def crnn_fn(features, labels, mode, params):
@@ -269,104 +316,104 @@ def crnn_fn(features, labels, mode, params):
         isTraining = False
         params['keep_prob'] = 1.0
 
-    # Alphabet and codes
-    alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
-    blank_label_code = 36
-    keys = [c for c in alphabet]
-    values = list(range(blank_label_code)) + list(range(10, blank_label_code + 1))
-
-    # Convert string to code
-    table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
-    splited = tf.string_split(labels, delimiter='')
-    codes = table_str2int.lookup(splited.values)
-    sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
-
-    sequence_lengths = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
+    # Initialization
+    eval_metric_ops = dict()
+    loss_ctc = None
+    train_op = None
 
     conv = deep_cnn(features['images'], isTraining)
     logprob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
     predictions_dict = {'prob': logprob, 'raw_predictions': raw_pred}
 
-    # Loss
-    loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
-                                      flat_labels=sparse_code_target.values,
-                                      label_lengths=tf.cast(sequence_lengths, tf.int32),
-                                      input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32)*params['max_length'],
-                                      blank_label=blank_label_code)
-    loss_ctc = tf.reduce_mean(loss_ctc)
+    blank_label_code = 36
+    if not mode == tf.estimator.ModeKeys.PREDICT:
+        # Alphabet and codes
+        alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
+        keys = [c for c in alphabet]
+        values = list(range(blank_label_code)) + list(range(10, blank_label_code + 1))
 
-    # loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
-    #                           inputs=predictions_dict['prob'],
-    #                           sequence_length=tf.cast(sequence_lengths, tf.int32),
-    #                           preprocess_collapse_repeated=False,
-    #                           ctc_merge_repeated=True,
-    #                           ignore_longer_outputs_than_inputs=False,
-    #                           time_major=True)
-    # loss_ctc = tf.reduce_mean(loss_ctc)
+        # Convert string to code
+        table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
+        splited = tf.string_split(labels, delimiter='')
+        codes = table_str2int.lookup(splited.values)
+        sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
 
-    # Create an ExponentialMovingAverage object
-    ema = tf.train.ExponentialMovingAverage(decay=0.99)
-    # Create the shadow variables, and add ops to maintain moving averages
-    maintain_averages_op = ema.apply([loss_ctc])
-    loss_ema = ema.average(loss_ctc)
+        sequence_lengths = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
 
-    # Train op
-    global_step = tf.train.get_or_create_global_step()
-    learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
-                                               params['decay_rate'], staircase=True)
+        # Loss
+        loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
+                                          flat_labels=sparse_code_target.values,
+                                          label_lengths=tf.cast(sequence_lengths, tf.int32),
+                                          input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32)*params['max_length'],
+                                          blank_label=blank_label_code)
+        loss_ctc = tf.reduce_mean(loss_ctc)
 
-    tf.summary.scalar('learning_rate', learning_rate)
-    tf.summary.scalar('ema_loss', loss_ema)
+        # loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
+        #                           inputs=predictions_dict['prob'],
+        #                           sequence_length=tf.cast(sequence_lengths, tf.int32),
+        #                           preprocess_collapse_repeated=False,
+        #                           ctc_merge_repeated=True,
+        #                           ignore_longer_outputs_than_inputs=False,
+        #                           time_major=True)
+        # loss_ctc = tf.reduce_mean(loss_ctc)
 
-    if params['optimizer'] == 'ada':
-        optimizer = tf.train.AdadeltaOptimizer(learning_rate)
-    elif params['optimizer'] == 'adam':
-        optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
-    elif params['optimizer'] == 'rms':
-        optimizer = tf.train.RMSPropOptimizer(learning_rate)
-    else:
-        print('Error, no optimizer. RMS by default.')
-        optimizer = tf.train.RMSPropOptimizer(learning_rate)
+        # Create an ExponentialMovingAverage object
+        ema = tf.train.ExponentialMovingAverage(decay=0.99)
+        # Create the shadow variables, and add ops to maintain moving averages
+        maintain_averages_op = ema.apply([loss_ctc])
+        loss_ema = ema.average(loss_ctc)
 
-    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-    with tf.control_dependencies(update_ops + [maintain_averages_op]):
-        train_op = optimizer.minimize(loss_ctc, global_step=global_step)
+        # Train op
+        global_step = tf.train.get_or_create_global_step()
+        learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
+                                                   params['decay_rate'], staircase=True)
+
+        tf.summary.scalar('learning_rate', learning_rate)
+        tf.summary.scalar('ema_loss', loss_ema)
+
+        if params['optimizer'] == 'ada':
+            optimizer = tf.train.AdadeltaOptimizer(learning_rate)
+        elif params['optimizer'] == 'adam':
+            optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
+        elif params['optimizer'] == 'rms':
+            optimizer = tf.train.RMSPropOptimizer(learning_rate)
+        else:
+            print('Error, no optimizer. RMS by default.')
+            optimizer = tf.train.RMSPropOptimizer(learning_rate)
+
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops + [maintain_averages_op]):
+            train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
     # Evaluation ops
+    if not mode == tf.estimator.ModeKeys.TRAIN:
+        # Convert code labels to string labels
+        keys = np.arange(blank_label_code + 1, dtype=np.int64)
+        alphabet_short = '0123456789abcdefghijklmnopqrstuvwxyz-'
+        values = [c for c in alphabet_short]
+        table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
 
-    # Convert code labels to string labels
-    keys = np.arange(37, dtype=np.int64)
-    alphabet_short = '0123456789abcdefghijklmnopqrstuvwxyz-'
-    values = [c for c in alphabet_short]
-    table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
+        (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
+                                                                       tf.ones([tf.shape(features['images'])[0]],
+                                                                               dtype=tf.int32) * params['max_length'],
+                                                                       merge_repeated=True)
 
-    (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
-                                                                   tf.ones([tf.shape(labels)[0]],
-                                                                           dtype=tf.int32) * params['max_length'],
-                                                                   merge_repeated=True)
+        sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
 
-    sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
+        pred_chars = table_int2str.lookup(sparse_code_pred)
+        predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
+        predictions_dict['filenames'] = features['filenames']
 
-    pred_chars = table_int2str.lookup(sparse_code_pred)
-    predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
+        if mode == tf.estimator.ModeKeys.EVAL:
+            CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
+            accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
 
-    CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
-    accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
+            eval_metric_ops = {# 'WER': 1 - accuracy[0],
+                               'accuracy': accuracy,
+                               'CER': CER,
+                               #'loss': loss_ctc
+                               }
 
-    eval_metric_ops = {# 'WER': 1 - accuracy[0],
-                       'accuracy': accuracy,
-                       'CER': CER,
-                       #'loss': loss_ctc
-                       }
-
-    # Output
-    # return model_fn_lib.ModelFnOps(
-    #     mode=mode,
-    #     predictions=predictions_dict,
-    #     loss=loss_ctc,
-    #     train_op=train_op,
-    #     eval_metric_ops=eval_metric_ops
-    # )
     return tf.estimator.EstimatorSpec(
         mode=mode,
         predictions=predictions_dict,

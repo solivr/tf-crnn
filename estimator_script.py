@@ -5,9 +5,9 @@ import argparse
 import os
 
 import tensorflow as tf
-from crnn.src.model_estimator import crnn_fn, data_loader
+from .src.model_estimator import crnn_fn, data_loader
 
-from crnn.src.config import Conf
+from .src.config import Conf
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -30,13 +30,16 @@ if __name__ == '__main__':
                 eval_interval=200,
                 save_interval=2500,
                 # data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
-                data_set='/scratch/sofia/synth-data/90kDICT32px/',
+                # data_set='/scratch/sofia/synth-data/90kDICT32px/',
+                data_set='/scratch/sofia/synth-data/IIIT-data/IIIT-HWS-Dataset/groundtruth/',
                 input_shape=[32, 100],
                 list_n_hidden=[256, 256],
                 max_len=24)
 
-    filename_train = os.path.join(conf.dataSet, 'new_annotation_train.csv')
-    filename_eval = os.path.join(conf.dataSet, 'new_annotation_val.csv')
+    # filename_train = os.path.join(conf.dataSet, 'new_annotation_train.csv')
+    # filename_eval = os.path.join(conf.dataSet, 'new_annotation_val.csv')
+    filename_train = os.path.abspath(os.path.join(conf.dataSet, 'new_iiit_hw_train.csv'))
+    filename_eval = os.path.abspath(os.path.join(conf.dataSet, 'new_iiit_hw_val.csv'))
 
     model_params = {
         'input_shape': conf.inputShape,
@@ -61,8 +64,8 @@ if __name__ == '__main__':
     try:
         while True:
             # Train for 10K steps and then evaluate
-            estimator.train(input_fn=data_loader(filename_train, 128, num_epochs=20), steps=10e3)
+            estimator.train(input_fn=data_loader(csv_filename=filename_train, batch_size=128, num_epochs=20), steps=10e3)
 
-            estimator.evaluate(input_fn=data_loader(filename_eval, 2000), steps=3)
+            estimator.evaluate(input_fn=data_loader(csv_filename=filename_eval, batch_size=2000), steps=3)
     except KeyboardInterrupt:
         print('Interrupted')
