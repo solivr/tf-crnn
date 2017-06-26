@@ -3,6 +3,7 @@ __author__ = 'solivr'
 
 import argparse
 import os
+import better_exceptions
 
 import tensorflow as tf
 from .src.model_estimator import crnn_fn, data_loader
@@ -30,7 +31,6 @@ if __name__ == '__main__':
                 eval_interval=200,
                 save_interval=2500,
                 # data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
-                # data_set='/scratch/sofia/synth-data/90kDICT32px/',
                 data_set='/scratch/sofia/synth-data/IIIT-data/IIIT-HWS-Dataset/groundtruth/',
                 input_shape=[32, 100],
                 list_n_hidden=[256, 256],
@@ -64,8 +64,14 @@ if __name__ == '__main__':
     try:
         while True:
             # Train for 10K steps and then evaluate
-            estimator.train(input_fn=data_loader(csv_filename=filename_train, batch_size=128, num_epochs=20), steps=10e3)
+            estimator.train(input_fn=data_loader(csv_filename=filename_train,
+                                                 batch_size=128,
+                                                 num_epochs=20,
+                                                 data_augmentation=True),
+                            steps=10e3)
 
-            estimator.evaluate(input_fn=data_loader(csv_filename=filename_eval, batch_size=2000), steps=3)
+            estimator.evaluate(input_fn=data_loader(csv_filename=filename_eval,
+                                                    batch_size=2000),
+                               steps=3)
     except KeyboardInterrupt:
         print('Interrupted')

@@ -200,7 +200,61 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
         return lstm_out, rawPred
 
 
-def data_loader(csv_filename, batch_size=128, input_shape=[32, 100], num_epochs=None):
+def random_rotation(img, max_rotation=0.1, crop=True):
+    with tf.name_scope('RandomRotation'):
+        rotation = tf.random_uniform([], -max_rotation, max_rotation)
+        rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
+        if crop:
+            rotation = tf.abs(rotation)
+            original_shape = tf.shape(rotated_image)[:2]
+            h, w = original_shape[0], original_shape[1]
+            # see https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders for formulae
+            old_l, old_s = tf.cond(h > w, lambda: [h, w], lambda: [w, h])
+            old_l, old_s = tf.cast(old_l, tf.float32), tf.cast(old_s, tf.float32)
+            new_l = (old_l * tf.cos(rotation) - old_s * tf.sin(rotation)) / tf.cos(2*rotation)
+            new_s = (old_s - tf.sin(rotation) * new_l) / tf.cos(rotation)
+            new_h, new_w = tf.cond(h > w, lambda: [new_l, new_s], lambda: [new_s, new_l])
+            new_h, new_w = tf.cast(new_h, tf.int32), tf.cast(new_w, tf.int32)
+            bb_begin = tf.cast(tf.ceil((h-new_h)/2), tf.int32), tf.cast(tf.ceil((w-new_w)/2), tf.int32)
+            rotated_image = rotated_image[bb_begin[0]:h-bb_begin[0], bb_begin[1]:w-bb_begin[1], :]
+        return rotated_image
+
+
+def augment_data(image):
+    with tf.name_scope('DataAugmentation'):
+        image = tf.image.random_brightness(image, max_delta=0.1)
+        image = tf.image.random_contrast(image, 0.5, 3.5)
+        image = random_rotation(image, np.random.uniform(0, 0.2), crop=True)
+
+        if image.get_shape[-1] >= 3:
+            image = tf.image.random_hue(image, 0.2)
+            image = tf.image.random_saturation(image, 0.5, 1.5)
+
+        return image
+
+
+def image_reading(path, resize_size=None, data_augmentation=False):
+    # Read image
+    image_content = tf.read_file(path, name='image_reader')
+    image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
+    # image = tf.image.decode_png(image_content, channels=1)
+
+    # image = tf.cond(tf.equal(tf.string_split([full_path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
+    #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
+    #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
+
+    # Data augmentation
+    if data_augmentation:
+        image = augment_data(image)
+
+    # Resize
+    if resize_size:
+        image = tf.image.resize_images(image, size=resize_size, method=tf.image.ResizeMethod.BICUBIC)
+
+    return image
+
+
+def data_loader(csv_filename, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -219,41 +273,24 @@ def data_loader(csv_filename, batch_size=128, input_shape=[32, 100], num_epochs=
         default_line = [['None'], ['None']]
         path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
 
-        # Shuffle queue -> batch of 1 (allowing to use batch with dynamic pad after)
-
         # Get full path
-        # full_dir = tf.constant([os.path.abspath(os.path.join(dirname, '..'))], tf.string)
         full_dir = dirname
         full_path = tf.string_join([full_dir, path], separator=os.path.sep)
 
-        # Get extension of image (png or jpg)
-
-
-        # Read image
-        image_content = tf.read_file(full_path, name='image_reader')
-        # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
-        image = tf.image.decode_png(image_content, channels=1)
-
-        # image = tf.cond(tf.equal(tf.string_split([full_path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
-        #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
-        #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
-        # Reshape
-        image = tf.image.resize_images(image, size=input_shape, method=tf.image.ResizeMethod.BICUBIC)
-
-        # Data augmentation
-        # TODO
+        image = image_reading(full_path, resize_size=input_shape, data_augmentation=data_augmentation)
 
         # Batch
-        img_batch, label_batch, filenames_batch = tf.train.batch([image, label, full_path], batch_size=batch_size, num_threads=15,
-                                                capacity=3000, dynamic_pad=False)
+        img_batch, label_batch, filenames_batch = tf.train.batch([image, label, full_path], batch_size=batch_size,
+                                                                 num_threads=15, capacity=3000, dynamic_pad=False)
 
-        return {'images': img_batch, 'filenames' : filenames_batch}, label_batch
+        return {'images': img_batch, 'filenames': filenames_batch}, label_batch
         # features = {img_batch, image width (rnn_seq_length)}
 
     return input_fn
 
 
-def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=[32, 100], num_epochs=None):
+def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=[32, 100], data_augmentation=False,
+                                    num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -266,29 +303,19 @@ def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=
 
         full_path = filename_queue.dequeue()
 
-        # Read image
-        image_content = tf.read_file(full_path, name='image_reader')
-        # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
-        image = tf.image.decode_png(image_content, channels=1)
-
-        # image = tf.cond(tf.equal(tf.string_split([full_path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
-        #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
-        #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
-        # Reshape
-        image = tf.image.resize_images(image, size=input_shape, method=tf.image.ResizeMethod.BICUBIC)
-
-        # Data augmentation
-        # TODO
+        image = image_reading(full_path, resize_size=input_shape, data_augmentation=data_augmentation)
 
         # Batch
         img_batch, filenames_batch = tf.train.batch([image, full_path], batch_size=batch_size, num_threads=15,
                                                     capacity=3000, dynamic_pad=False, allow_smaller_final_batch=True)
+        # img_batch, filenames_batch = tf.train.shuffle_batch([image, full_path], batch_size=batch_size,
+        #                                                     num_threads=15, capacity=3000, dynamic_pad=False,
+        #                                                     allow_smaller_final_batch=True)
 
         return {'images': img_batch, 'filenames': filenames_batch}
         # features = {img_batch, image width (rnn_seq_length)}
 
     return input_fn
-
 
 
 def crnn_fn(features, labels, mode, params):
