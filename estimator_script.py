@@ -47,13 +47,21 @@ if __name__ == '__main__':
         'optimizer': args.optimizer,
         'decay_rate': conf.decay_rate,
         'decay_steps': 10000,
-        'max_length': conf.maxLength
+        'max_length': conf.maxLength,
+        'digits_only': False
     }
+
+    # Config estimator
+    est_config = tf.estimator.RunConfig()
+    est_config._keep_checkpoint_max = 10
+    est_config._save_checkpoints_steps = conf.saveInterval
+    est_config._session_config = config_sess
+    est_config._save_checkpoints_secs = None
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,
                                        model_dir=args.output_dir,
-                                       # config=
+                                       config=est_config
                                        )
 
     # if args.isTraining:
