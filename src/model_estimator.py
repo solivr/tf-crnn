@@ -27,13 +27,17 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
 
 def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
     input_tensor = inputImgs
+    if input_tensor.shape[-1] == 1:
+        input_channels = 1
+    if input_tensor.shape[-1] == 3:
+        input_channels = 3
 
     # Following source code, not paper
 
     with tf.variable_scope('deep_cnn'):
         # - conv1 - maxPool2x2
         with tf.variable_scope('layer1'):
-            W = weightVar([3, 3, 1, 64])
+            W = weightVar([3, 3, input_channels, 64])
             b = biasVar([64])
             conv = conv2d(input_tensor, W, name='conv')
             out = tf.nn.bias_add(conv, b)
@@ -124,7 +128,7 @@ def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
             bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/bias:0'][0]
             tf.summary.histogram('bias', bias)
 
-        # conv 7 - w/batch-norm (as source code, not paper)
+        # - conv 7 - w/batch-norm (as source code, not paper)
         with tf.variable_scope('layer7'):
             W = weightVar([2, 2, 512, 512])
             b = biasVar([512])
@@ -254,7 +258,7 @@ def image_reading(path, resize_size=None, data_augmentation=False):
     return image
 
 
-def data_loader(csv_filename, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
+def data_loader(csv_filename, global_step=0, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -267,7 +271,8 @@ def data_loader(csv_filename, batch_size=128, input_shape=[32, 100], data_augmen
         else:
             raise TypeError
 
-        reader = tf.TextLineReader(name='CSV_Reader')
+        # Skip lines that have already been processed
+        reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=batch_size*global_step)
         key, value = reader.read(filename_queue, name='file_reading_op')
 
         default_line = [['None'], ['None']]
@@ -338,6 +343,7 @@ def crnn_fn(features, labels, mode, params):
                         }
     :return:
     """
+
     if mode == 'train':
         isTraining = True
         params['keep_prob'] = 0.7
@@ -370,10 +376,11 @@ def crnn_fn(features, labels, mode, params):
         values = list(range(blank_label_code)) + list(range(10, blank_label_code + 1))
 
         # Convert string to code
-        table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
-        splited = tf.string_split(labels, delimiter='')
-        codes = table_str2int.lookup(splited.values)
-        sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
+        with tf.name_scope('str2code_conversion'):
+            table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
+            splited = tf.string_split(labels, delimiter='')
+            codes = table_str2int.lookup(splited.values)
+            sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
 
         sequence_lengths = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
 
@@ -425,15 +432,16 @@ def crnn_fn(features, labels, mode, params):
     # Evaluation ops
     if not mode == tf.estimator.ModeKeys.TRAIN:
         # Convert code labels to string labels
-        keys = np.arange(blank_label_code + 1, dtype=np.int64)
-        alphabet_short = '0123456789abcdefghijklmnopqrstuvwxyz-'
-        values = [c for c in alphabet_short]
-        table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
+        with tf.name_scope('code2str_conversion'):
+            keys = np.arange(blank_label_code + 1, dtype=np.int64)
+            alphabet_short = '0123456789abcdefghijklmnopqrstuvwxyz-'
+            values = [c for c in alphabet_short]
+            table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
 
-        (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
-                                                                       tf.ones([tf.shape(features['images'])[0]],
-                                                                               dtype=tf.int32) * params['max_length'],
-                                                                       merge_repeated=True)
+            (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
+                                                                           tf.ones([tf.shape(features['images'])[0]],
+                                                                                   dtype=tf.int32) * params['max_length'],
+                                                                           merge_repeated=True)
 
         sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
 
@@ -442,14 +450,14 @@ def crnn_fn(features, labels, mode, params):
         predictions_dict['filenames'] = features['filenames']
 
         if mode == tf.estimator.ModeKeys.EVAL:
-            CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
-            accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
+            with tf.name_scope('evaluation'):
+                CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
+                accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
 
-            eval_metric_ops = {# 'WER': 1 - accuracy[0],
-                               'accuracy': accuracy,
-                               'CER': CER,
-                               #'loss': loss_ctc
-                               }
+                eval_metric_ops = {
+                                   'accuracy': accuracy,
+                                   'CER': CER,
+                                   }
 
     return tf.estimator.EstimatorSpec(
         mode=mode,

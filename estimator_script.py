@@ -6,15 +6,14 @@ import os
 import better_exceptions
 
 import tensorflow as tf
-from .src.model_estimator import crnn_fn, data_loader
+from src.model_estimator import crnn_fn, data_loader
 
-from .src.config import Conf
+from src.config import Conf
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--output_dir', type=str, help='Directory for output', default='./estimator')
     parser.add_argument('-g', '--gpu', type=str, help='GPU 0,1 or '' ', default='')
-    parser.add_argument('-t', '--isTraining', type=bool, help='1 for training, 0 for evaluation', default=True)
     parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (rms, ada, adam)', default='rms')
     args = parser.parse_args()
 
@@ -24,16 +23,15 @@ if __name__ == '__main__':
 
     conf = Conf(n_classes=37,
                 train_batch_size=128,
-                eval_batch_size=32,
+                eval_batch_size=2000,
                 learning_rate=0.001,  # 0.001 for adadelta
                 decay_rate=0.9,
-                max_iteration=300000,
-                eval_interval=200,
-                save_interval=2500,
+                max_epochs=10,
+                eval_interval=10e3,
+                save_interval=10000,
                 # data_set='/home/soliveir/NAS-DHProcessing/mnt/ramdisk/max/90kDICT32px/',
                 data_set='/scratch/sofia/synth-data/IIIT-data/IIIT-HWS-Dataset/groundtruth/',
                 input_shape=[32, 100],
-                list_n_hidden=[256, 256],
                 max_len=24)
 
     # filename_train = os.path.join(conf.dataSet, 'new_annotation_train.csv')
@@ -57,6 +55,7 @@ if __name__ == '__main__':
     est_config._save_checkpoints_steps = conf.saveInterval
     est_config._session_config = config_sess
     est_config._save_checkpoints_secs = None
+    est_config._save_summary_steps = 1000
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,
@@ -64,22 +63,20 @@ if __name__ == '__main__':
                                        config=est_config
                                        )
 
-    # if args.isTraining:
-    #     estimator.train(input_fn=data_loader(filename_train, 128, num_epochs=20))
-    # else:
-    #     estimator.evaluate(input_fn=data_loader(filename_eval, 128, num_epochs=1))
-
     try:
+        train_steps = conf.evalInterval
+        global_step = 0
         while True:
             # Train for 10K steps and then evaluate
             estimator.train(input_fn=data_loader(csv_filename=filename_train,
-                                                 batch_size=128,
-                                                 num_epochs=20,
+                                                 global_step=global_step,
+                                                 batch_size=conf.trainBatchSize,
+                                                 num_epochs=conf.maxEpochs,
                                                  data_augmentation=True),
-                            steps=10e3)
-
+                            steps=train_steps)
+            global_step += train_steps
             estimator.evaluate(input_fn=data_loader(csv_filename=filename_eval,
-                                                    batch_size=2000),
+                                                    batch_size=conf.evalBatchSize),
                                steps=3)
     except KeyboardInterrupt:
         print('Interrupted')
