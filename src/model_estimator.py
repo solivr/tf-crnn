@@ -224,25 +224,6 @@ def random_rotation(img, max_rotation=0.1, crop=True):
         return rotated_image
 
 
-def padding_inputs_width(image, target_shape):
-
-    shape = tf.shape(image)
-    ratio = tf.divide(shape[1], shape[0])
-    new_h = target_shape[0]
-    new_w = round(ratio * new_h)
-    target_w = target_shape[1]
-    pad = target_w - new_w
-
-    img_resized = tf.image.resize_images(image, [new_h, new_w],
-                                         method=tf.image.ResizeMethod.BILINEAR)
-
-    # Padding to have the desired shape
-    paddings = [[0, 0], [0, pad], [0, 0]]
-    pad_image = tf.pad(img_resized, paddings, mode='SYMMETRIC', name=None)
-
-    return pad_image, new_w  # new_w = seq_length needed for decoding
-
-
 def random_padding(image, max_pad_w=5, max_pad_h=10):
     w_pad = np.random.randint(0, max_pad_w, size=[2])
     h_pad = np.random.randint(0, max_pad_h, size=[2])
@@ -268,7 +249,35 @@ def augment_data(image):
         return image
 
 
-def image_reading(path, resize_size=None, data_augmentation=False):
+def padding_inputs_width(image, target_shape):
+
+    # Compute ratio to keep the same ratio in new image and get the size of padding
+    # necessary to have the final desired shape
+    shape = tf.shape(image)
+    ratio = tf.divide(shape[1], shape[0])
+    new_h = target_shape[0]
+    new_w = round(ratio * new_h)
+    target_w = target_shape[1]
+    pad = target_w - new_w
+
+    img_resized = tf.image.resize_images(image, [new_h, new_w],
+                                         method=tf.image.ResizeMethod.BILINEAR)
+
+    # Padding to have the desired width
+    paddings = [[0, 0], [0, pad], [0, 0]]
+    pad_image = tf.pad(img_resized, paddings, mode='SYMMETRIC', name=None)
+
+    # Compute seq_len
+    n_pools = 2*2  # 2x2 pooling in dimension W on layer 1 and 2
+    if (new_w % 2) == 0:  # even number
+        seq_len = round(new_w/n_pools) - 1
+    else:
+        seq_len = round((new_w + 1)/n_pools) - 1
+
+    return pad_image, seq_len  # new_w = seq_length needed for decoding
+
+
+def image_reading(path, resized_size=None, data_augmentation=False, padding=False):
     # Read image
     image_content = tf.read_file(path, name='image_reader')
     # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
@@ -278,18 +287,20 @@ def image_reading(path, resize_size=None, data_augmentation=False):
     #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
     #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
 
-    # Padding
-    # TODO
-
     # Data augmentation
     if data_augmentation:
         image = augment_data(image)
 
+    # Padding
+    # TODO
+    if padding:
+        image, seq_len = padding_inputs_width(image, resized_size)
     # Resize
-    if resize_size:
-        image = tf.image.resize_images(image, size=resize_size, method=tf.image.ResizeMethod.BICUBIC)
+    elif resized_size:
+        image = tf.image.resize_images(image, size=resized_size, method=tf.image.ResizeMethod.BICUBIC)
+        seq_len = resized_size[1]
 
-    return image
+    return image, seq_len
 
 
 def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
@@ -316,45 +327,48 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=[32, 100], d
         full_dir = dirname
         full_path = tf.string_join([full_dir, path], separator=os.path.sep)
 
-        image = image_reading(full_path, resize_size=input_shape, data_augmentation=data_augmentation)
+        image, rnn_seq_len = image_reading(full_path, resized_size=input_shape,
+                                           data_augmentation=data_augmentation, padding=False)
 
         # Batch
-        img_batch, label_batch, filenames_batch = tf.train.batch([image, label, full_path], batch_size=batch_size,
-                                                                 num_threads=15, capacity=3000, dynamic_pad=False)
+        img_batch, label_batch, filenames_batch, seq_len_batch = tf.train.batch([image, label, full_path, rnn_seq_len],
+                                                                                batch_size=batch_size,
+                                                                                num_threads=15, capacity=3000,
+                                                                                dynamic_pad=False)
 
-        return {'images': img_batch, 'filenames': filenames_batch}, label_batch
+        return {'images': img_batch, 'sequence_length': seq_len_batch, 'filenames': filenames_batch}, \
+               label_batch
         # features = {img_batch, image width (rnn_seq_length)}
 
     return input_fn
 
 
-def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=[32, 100], data_augmentation=False,
-                                    num_epochs=None):
-
-    def input_fn():
-        # Choose case one csv file or list of csv files
-        if not isinstance(list_filenames, list):
-            filename_queue = tf.train.string_input_producer([list_filenames], num_epochs=num_epochs)
-        elif isinstance(list_filenames, list):
-            filename_queue = tf.train.string_input_producer(list_filenames, num_epochs=num_epochs)
-        else:
-            raise TypeError
-
-        full_path = filename_queue.dequeue()
-
-        image = image_reading(full_path, resize_size=input_shape, data_augmentation=data_augmentation)
-
-        # Batch
-        img_batch, filenames_batch = tf.train.batch([image, full_path], batch_size=batch_size, num_threads=15,
-                                                    capacity=3000, dynamic_pad=False, allow_smaller_final_batch=True)
-        # img_batch, filenames_batch = tf.train.shuffle_batch([image, full_path], batch_size=batch_size,
-        #                                                     num_threads=15, capacity=3000, dynamic_pad=False,
-        #                                                     allow_smaller_final_batch=True)
-
-        return {'images': img_batch, 'filenames': filenames_batch}
-        # features = {img_batch, image width (rnn_seq_length)}
-
-    return input_fn
+# def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=[32, 100], data_augmentation=False,
+#                                     num_epochs=None):
+#
+#     def input_fn():
+#         # Choose case one csv file or list of csv files
+#         if not isinstance(list_filenames, list):
+#             filename_queue = tf.train.string_input_producer([list_filenames], num_epochs=num_epochs)
+#         elif isinstance(list_filenames, list):
+#             filename_queue = tf.train.string_input_producer(list_filenames, num_epochs=num_epochs)
+#         else:
+#             raise TypeError
+#
+#         full_path = filename_queue.dequeue()
+#
+#         image = image_reading(full_path, resized_size=input_shape, data_augmentation=data_augmentation)
+#
+#         # Batch
+#         img_batch, filenames_batch = tf.train.batch([image, full_path], batch_size=batch_size, num_threads=15,
+#                                                     capacity=3000, dynamic_pad=False, allow_smaller_final_batch=True)
+#         # img_batch, filenames_batch = tf.train.shuffle_batch([image, full_path], batch_size=batch_size,
+#         #                                                     num_threads=15, capacity=3000, dynamic_pad=False,
+#         #                                                     allow_smaller_final_batch=True)
+#
+#         return {'images': img_batch, 'filenames': filenames_batch}
+#
+#     return input_fn
 
 
 def crnn_fn(features, labels, mode, params):
@@ -422,7 +436,8 @@ def crnn_fn(features, labels, mode, params):
         loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
                                           flat_labels=sparse_code_target.values,
                                           label_lengths=tf.cast(sequence_lengths, tf.int32),
-                                          input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32)*params['max_length'],
+                                          # input_lengths=tf.ones([tf.shape(labels)[0]], dtype=tf.int32)*params['max_length'],
+                                          input_lengths=tf.cast(features['sequence_length'], dtype=tf.int32),
                                           blank_label=blank_label_code)
         loss_ctc = tf.reduce_mean(loss_ctc)
 
