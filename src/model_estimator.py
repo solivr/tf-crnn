@@ -224,6 +224,25 @@ def random_rotation(img, max_rotation=0.1, crop=True):
         return rotated_image
 
 
+def padding_inputs_width(image, target_shape):
+
+    shape = tf.shape(image)
+    ratio = tf.divide(shape[1], shape[0])
+    new_h = target_shape[0]
+    new_w = round(ratio * new_h)
+    target_w = target_shape[1]
+    pad = target_w - new_w
+
+    img_resized = tf.image.resize_images(image, [new_h, new_w],
+                                         method=tf.image.ResizeMethod.BILINEAR)
+
+    # Padding to have the desired shape
+    paddings = [[0, 0], [0, pad], [0, 0]]
+    pad_image = tf.pad(img_resized, paddings, mode='SYMMETRIC', name=None)
+
+    return pad_image, new_w  # new_w = seq_length needed for decoding
+
+
 def random_padding(image, max_pad_w=5, max_pad_h=10):
     w_pad = np.random.randint(0, max_pad_w, size=[2])
     h_pad = np.random.randint(0, max_pad_h, size=[2])
@@ -252,8 +271,8 @@ def augment_data(image):
 def image_reading(path, resize_size=None, data_augmentation=False):
     # Read image
     image_content = tf.read_file(path, name='image_reader')
-    image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
-    # image = tf.image.decode_png(image_content, channels=1)
+    # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
+    image = tf.image.decode_image(image_content, channels=1)
 
     # image = tf.cond(tf.equal(tf.string_split([full_path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
     #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
@@ -428,7 +447,7 @@ def crnn_fn(features, labels, mode, params):
                                                    params['decay_rate'], staircase=True)
 
         tf.summary.scalar('learning_rate', learning_rate)
-        tf.summary.scalar('ema_loss', loss_ema)
+        # tf.summary.scalar('ema_loss', loss_ema)
 
         if params['optimizer'] == 'ada':
             optimizer = tf.train.AdadeltaOptimizer(learning_rate)
