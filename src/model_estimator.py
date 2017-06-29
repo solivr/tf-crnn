@@ -224,8 +224,20 @@ def random_rotation(img, max_rotation=0.1, crop=True):
         return rotated_image
 
 
+def random_padding(image, max_pad_w=5, max_pad_h=10):
+    w_pad = np.random.randint(0, max_pad_w, size=[2])
+    h_pad = np.random.randint(0, max_pad_h, size=[2])
+    paddings = [h_pad, w_pad, [0, 0]]
+
+    return tf.pad(image, paddings, mode='REFLECT', name='random_padding')
+
+
 def augment_data(image):
     with tf.name_scope('DataAugmentation'):
+
+        # Random padding TODO
+        # image = random_padding(image)
+
         image = tf.image.random_brightness(image, max_delta=0.1)
         image = tf.image.random_contrast(image, 0.5, 3.5)
         image = random_rotation(image, np.random.uniform(0, 0.2), crop=True)
@@ -247,6 +259,9 @@ def image_reading(path, resize_size=None, data_augmentation=False):
     #                 true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
     #                 false_fn=lambda: tf.image.decode_png(image_content, channels=1))
 
+    # Padding
+    # TODO
+
     # Data augmentation
     if data_augmentation:
         image = augment_data(image)
@@ -258,7 +273,7 @@ def image_reading(path, resize_size=None, data_augmentation=False):
     return image
 
 
-def data_loader(csv_filename, global_step=0, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
+def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -272,7 +287,7 @@ def data_loader(csv_filename, global_step=0, batch_size=128, input_shape=[32, 10
             raise TypeError
 
         # Skip lines that have already been processed
-        reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=batch_size*global_step)
+        reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=cursor)
         key, value = reader.read(filename_queue, name='file_reading_op')
 
         default_line = [['None'], ['None']]
@@ -468,23 +483,23 @@ def crnn_fn(features, labels, mode, params):
     )
 
 
-# Benoit's function
-def decode_and_resize(max_size, increment, data_augmentation_fn=None):
-    def fn(raw_input):
-        decoded_image = tf.cast(tf.image.decode_jpeg(raw_input, channels=3), tf.float32)
-        if data_augmentation_fn:
-            decoded_image = data_augmentation_fn(decoded_image)
-        original_shape = tf.cast(tf.shape(decoded_image)[:2], tf.float32)
-        ratio = tf.reduce_min(max_size/original_shape)
-        new_shape = original_shape * ratio
-        rounded_shape = tf.cast(tf.round(new_shape/increment)*increment, tf.int32)
-        resized_image = tf.image.resize_images(decoded_image, rounded_shape)
-        paddings = tf.minimum(rounded_shape-1, max_size-rounded_shape)
-        # Do as much reflecting padding as possible to avoid screwing the batch_norm statistics
-        padded_image = tf.pad(resized_image, [[0, paddings[0]], [0, paddings[1]], [0, 0]],
-                             mode='REFLECT')
-        padded_image = tf.pad(padded_image, [[0, max_size-rounded_shape[0]-paddings[0]], [0, max_size-rounded_shape[1]-paddings[1]], [0, 0]],
-                              mode='CONSTANT')
-        padded_image.set_shape([max_size, max_size, 3])
-        return padded_image, rounded_shape
-    return fn
+# # Benoit's function
+# def decode_and_resize(max_size, increment, data_augmentation_fn=None):
+#     def fn(raw_input):
+#         decoded_image = tf.cast(tf.image.decode_jpeg(raw_input, channels=3), tf.float32)
+#         if data_augmentation_fn:
+#             decoded_image = data_augmentation_fn(decoded_image)
+#         original_shape = tf.cast(tf.shape(decoded_image)[:2], tf.float32)
+#         ratio = tf.reduce_min(max_size/original_shape)
+#         new_shape = original_shape * ratio
+#         rounded_shape = tf.cast(tf.round(new_shape/increment)*increment, tf.int32)
+#         resized_image = tf.image.resize_images(decoded_image, rounded_shape)
+#         paddings = tf.minimum(rounded_shape-1, max_size-rounded_shape)
+#         # Do as much reflecting padding as possible to avoid screwing the batch_norm statistics
+#         padded_image = tf.pad(resized_image, [[0, paddings[0]], [0, paddings[1]], [0, 0]],
+#                              mode='REFLECT')
+#         padded_image = tf.pad(padded_image, [[0, max_size-rounded_shape[0]-paddings[0]], [0, max_size-rounded_shape[1]-paddings[1]], [0, 0]],
+#                               mode='CONSTANT')
+#         padded_image.set_shape([max_size, max_size, 3])
+#         return padded_image, rounded_shape
+#     return fn
