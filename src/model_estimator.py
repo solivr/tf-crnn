@@ -263,48 +263,52 @@ def padding_inputs_width(image, target_shape, increment=2):
 
     # Definitions for cases
     def pad_fn():
-        pad = tf.subtract(target_w, new_w)
+        with tf.name_scope('mirror_padding'):
+            pad = tf.subtract(target_w, new_w)
 
-        img_resized = tf.image.resize_images(image, [new_h, new_w],
-                                             method=tf.image.ResizeMethod.BILINEAR)
+            img_resized = tf.image.resize_images(image, [new_h, new_w])
 
-        # Padding to have the desired width
-        paddings = [[0, 0], [0, pad], [0, 0]]
-        pad_image = tf.pad(img_resized, paddings, mode='SYMMETRIC', name=None)
+            # Padding to have the desired width
+            paddings = [[0, 0], [0, pad], [0, 0]]
+            pad_image = tf.pad(img_resized, paddings, mode='SYMMETRIC', name=None)
 
-        # Set manually the shape
-        pad_image.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
+            # Set manually the shape
+            pad_image.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
 
-        return pad_image, [new_h, new_w]
+            return pad_image, (new_h, new_w)
 
     def replicate_fn():
-        img_resized = tf.image.resize_images(image, [new_h, new_w],
-                                             method=tf.image.ResizeMethod.BILINEAR)
+        with tf.name_scope('replication_padding'):
+            img_resized = tf.image.resize_images(image, [new_h, new_w])
 
-        # If one symmetry is not enough to have a full width
-        # Count number of replications needed
-        n_replication = tf.cast(tf.ceil(target_shape[1]/new_w), tf.int32)
-        img_replicated = tf.tile(img_resized, tf.stack([1, n_replication, 1]))
-        pad_image = tf.image.crop_to_bounding_box(img_replicated, 0, 0, target_shape[0], target_shape[1])
+            # If one symmetry is not enough to have a full width
+            # Count number of replications needed
+            n_replication = tf.cast(tf.ceil(target_shape[1]/new_w), tf.int32)
+            img_replicated = tf.tile(img_resized, tf.stack([1, n_replication, 1]))
+            pad_image = tf.image.crop_to_bounding_box(img_replicated, 0, 0, target_shape[0], target_shape[1])
 
-        # Set manually the shape
-        pad_image.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
+            # Set manually the shape
+            pad_image.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
 
-        return pad_image, [new_h, new_w]
+            return pad_image, (new_h, new_w)
 
-    resize_fn = lambda: (tf.image.resize_images(image, target_shape, method=tf.image.ResizeMethod.BILINEAR),
+    resize_fn = lambda: (tf.image.resize_images(image, target_shape),
                          target_shape)
 
     # 3 cases
-    pad_image, (new_h, new_w) = tf.case({tf.greater_equal(ratio, target_ratio): resize_fn,  # new_w >= target_w
-                                         # case 2 : new_w >= target_w/2 & new_w < target_w
-                                         tf.logical_and(tf.greater_equal(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)),
-                                                        tf.less(new_w, target_w)): pad_fn,
-                                         # case 3 : new_w < target_w/2 & new_w < target_w
-                                         tf.logical_and(tf.less(new_w, target_w),
-                                                        tf.less(new_w, tf.cast(tf.divide(target_w, 2), tf.int32))): replicate_fn
+    pad_image, (new_h, new_w) = tf.case({  # new_w >= target_w
+                                         tf.logical_and(tf.greater_equal(ratio, target_ratio),
+                                                        tf.greater_equal(new_w, target_w)): resize_fn,
+                                         # case 2 : new_w >= target_w/2 & new_w < target_w & ratio < target_ratio
+                                         tf.logical_and(tf.less(ratio, target_ratio),
+                                            tf.logical_and(tf.greater_equal(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)),
+                                                    tf.less(new_w, target_w))): pad_fn,
+                                         # case 3 : new_w < target_w/2 & new_w < target_w & ratio < target_ratio
+                                         tf.logical_and(tf.less(ratio, target_ratio),
+                                            tf.logical_and(tf.less(new_w, target_w),
+                                                    tf.less(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)))): replicate_fn
                                          },
-                                        default=resize_fn, exclusive=False)
+                                        default=resize_fn, exclusive=True)
 
     # pad_image, (new_h, new_w) = tf.cond(ratio < target_ratio,
     #                                     true_fn=pad_fn,
@@ -318,17 +322,11 @@ def padding_inputs_width(image, target_shape, increment=2):
 def image_reading(path, resized_size=None, data_augmentation=False, padding=False):
     # Read image
     image_content = tf.read_file(path, name='image_reader')
-    # image = tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True)
-    # image = tf.image.decode_image(image_content, channels=1)
-    # image = tf.image.decode_png(image_content, channels=1)
-    # shape = tf.shape(image)
-    # image.set_shape(shape)
-
     image = tf.cond(tf.equal(tf.string_split([path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
                     true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
                     false_fn=lambda: tf.image.decode_png(image_content, channels=1))
 
-    tf.Assert(tf.not_equal(tf.size(image), 0), [image])
+    # tf.Assert(tf.equal(tf.size(image), 0), [image])
 
     # Data augmentation
     if data_augmentation:
@@ -336,16 +334,16 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
 
     # Padding
     if padding:
-        image, seq_len = padding_inputs_width(image, resized_size)
+        image, img_width = padding_inputs_width(image, resized_size)
     # Resize
     elif resized_size:
-        image = tf.image.resize_images(image, size=resized_size, method=tf.image.ResizeMethod.BICUBIC)
-        seq_len = round(resized_size[1]/4) - 1
+        image = tf.image.resize_images(image, size=resized_size)
+        img_width = round(resized_size[1]/4) - 1
 
-    return image, seq_len
+    return image, img_width
 
 
-def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=[32, 100], data_augmentation=False, num_epochs=None):
+def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), data_augmentation=False, num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -380,7 +378,6 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=[32, 100], d
 
         return {'images': img_batch, 'images_widths': img_width_batch, 'filenames': filenames_batch}, \
                label_batch
-        # features = {img_batch, image width (rnn_seq_length)}
 
     return input_fn
 
@@ -446,7 +443,7 @@ def crnn_fn(features, labels, mode, params):
     loss_ctc = None
     train_op = None
 
-    tf.summary.image('input_image', features['images'], 3)
+    # tf.summary.image('input_image', features['images'], 3)
 
     conv = deep_cnn(features['images'], isTraining)
     logprob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
@@ -535,11 +532,11 @@ def crnn_fn(features, labels, mode, params):
             values = [c for c in alphabet_short]
             table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
 
-            (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_beam_search_decoder(predictions_dict['prob'],
+            (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
                                                                            sequence_length=tf.cast(seq_len_inputs, tf.int32),
-                                                                           # tf.ones([tf.shape(features['images'])[0]],
-                                                                           #         dtype=tf.int32) * params['max_length'],
                                                                            merge_repeated=True,
+                                                                           # beam_width=100,
+                                                                           # top_paths=1,
                                                                                 )
 
         sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1

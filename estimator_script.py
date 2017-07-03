@@ -27,21 +27,19 @@ if __name__ == '__main__':
 
     conf = Conf(n_classes=37,
                 train_batch_size=128,
-                eval_batch_size=2000,
+                eval_batch_size=1000,
                 learning_rate=0.001,  # 0.001 for adadelta
                 decay_rate=0.9,
-                max_epochs=60,
-                eval_interval=1e3,
-                save_interval=1000,
+                max_epochs=50,
+                eval_interval=1000,
+                save_interval=5000,
                 # data_set='/scratch/sofia/synth-data/90kDICT32px/',
                 # data_set='/scratch/sofia/synth-data/IIIT-data/IIIT-HWS-Dataset/groundtruth/',
                 data_set='/scratch/sofia/vtm_data/',
                 # data_set=args.dataset_dir,
-                input_shape=[32, 100],
-                max_len=24)
-
-    # filename_train = os.path.join(conf.dataSet, args.csv_filename + '_train.csv')
-    # filename_eval = os.path.join(conf.dataSet, args.csv_filename + '_val.csv')
+                input_shape=(32, 100),
+                # max_len=24
+                )
 
     # filename_train = os.path.join(conf.dataSet, 'new_annotation_train.csv')
     # filename_eval = os.path.join(conf.dataSet, 'new_annotation_val.csv')
@@ -88,12 +86,14 @@ if __name__ == '__main__':
             estimator.train(input_fn=data_loader(csv_filename=filename_train,
                                                  cursor=(glb_step * conf.trainBatchSize) % n_samples,
                                                  batch_size=conf.trainBatchSize,
+                                                 input_shape=model_params['input_shape'],
                                                  num_epochs=conf.maxEpochs,
                                                  data_augmentation=True),
                             steps=train_steps)
             glb_step += train_steps
             estimator.evaluate(input_fn=data_loader(csv_filename=filename_eval,
-                                                    batch_size=conf.evalBatchSize),
+                                                    batch_size=conf.evalBatchSize,
+                                                    input_shape=model_params['input_shape']),
                                steps=3)
     except KeyboardInterrupt:
         print('Interrupted')
