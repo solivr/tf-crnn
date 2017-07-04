@@ -538,12 +538,13 @@ def crnn_fn(features, labels, mode, params):
             values = [c for c in alphabet_short]
             table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
 
-            (sparse_code_pred,), neg_sum_logits = tf.nn.ctc_greedy_decoder(predictions_dict['prob'],
-                                                                           sequence_length=tf.cast(seq_len_inputs, tf.int32),
-                                                                           merge_repeated=True,
-                                                                           # beam_width=100,
-                                                                           # top_paths=1,
-                                                                                )
+            sparse_code_pred, log_probability = tf.nn.ctc_beam_search_decoder(predictions_dict['prob'],
+                                                                              sequence_length=tf.cast(seq_len_inputs, tf.int32),
+                                                                              merge_repeated=False,  # already merged in ctc_loss
+                                                                              beam_width=100,
+                                                                              top_paths=2)
+        sparse_code_pred = sparse_code_pred[0]
+        predictions_dict['difference_logprob'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
 
         sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
 
