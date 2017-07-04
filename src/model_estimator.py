@@ -329,7 +329,9 @@ def crnn_fn(features, labels, mode, params):
                                                                               beam_width=100,
                                                                               top_paths=2)
         sparse_code_pred = sparse_code_pred[0]
+        # Find a way to estimate the confidence in the prediction
         predictions_dict['difference_logprob'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
+        # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
 
         sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
 
