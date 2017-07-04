@@ -255,7 +255,7 @@ def padding_inputs_width(image, target_shape, increment=2):
     # Compute ratio to keep the same ratio in new image and get the size of padding
     # necessary to have the final desired shape
     shape = tf.shape(image)
-    ratio = tf.divide(shape[1], shape[0])
+    ratio = tf.divide(shape[1], shape[0], name='ratio')
 
     new_h = target_shape[0]
     new_w = tf.cast(tf.round((ratio * new_h) / increment) * increment, tf.int32)
@@ -292,13 +292,18 @@ def padding_inputs_width(image, target_shape, increment=2):
 
             return pad_image, (new_h, new_w)
 
-    resize_fn = lambda: (tf.image.resize_images(image, target_shape),
-                         target_shape)
+    def simple_resize():
+        with tf.name_scope('simple_resize'):
+            img_resized = tf.image.resize_images(image, target_shape)
+
+            img_resized.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
+
+            return img_resized, target_shape
 
     # 3 cases
     pad_image, (new_h, new_w) = tf.case({  # new_w >= target_w
                                          tf.logical_and(tf.greater_equal(ratio, target_ratio),
-                                                        tf.greater_equal(new_w, target_w)): resize_fn,
+                                                        tf.greater_equal(new_w, target_w)): simple_resize,
                                          # case 2 : new_w >= target_w/2 & new_w < target_w & ratio < target_ratio
                                          tf.logical_and(tf.less(ratio, target_ratio),
                                             tf.logical_and(tf.greater_equal(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)),
@@ -308,7 +313,7 @@ def padding_inputs_width(image, target_shape, increment=2):
                                             tf.logical_and(tf.less(new_w, target_w),
                                                     tf.less(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)))): replicate_fn
                                          },
-                                        default=resize_fn, exclusive=True)
+                                        default=simple_resize, exclusive=True)
 
     # pad_image, (new_h, new_w) = tf.cond(ratio < target_ratio,
     #                                     true_fn=pad_fn,
@@ -334,7 +339,8 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
 
     # Padding
     if padding:
-        image, img_width = padding_inputs_width(image, resized_size)
+        with tf.name_scope('padding'):
+            image, img_width = padding_inputs_width(image, resized_size)
     # Resize
     elif resized_size:
         image = tf.image.resize_images(image, size=resized_size)
