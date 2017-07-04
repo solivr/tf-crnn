@@ -7,7 +7,8 @@ import csv
 import better_exceptions
 
 import tensorflow as tf
-from src.model_estimator import crnn_fn, data_loader
+from src.model_estimator import crnn_fn
+from src.data_handler import data_loader
 
 from src.config import Conf
 
