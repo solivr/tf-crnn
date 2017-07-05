@@ -98,3 +98,7 @@ if __name__ == '__main__':
                                steps=3)
     except KeyboardInterrupt:
         print('Interrupted')
+
+# Export model
+# estimator.export_savedmodel('./exported_models/',
+#                            serving_input_receiver_fn= preprocess_image_for_prediction())

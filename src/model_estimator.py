@@ -147,7 +147,7 @@ def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
             shape = cnn_net.get_shape().as_list()  # [batch, height, width, features]
             transposed = tf.transpose(cnn_net, perm=[0, 2, 1, 3],
                                       name='transposed')  # [batch, width, height, features]
-            conv_reshaped = tf.reshape(transposed, [-1, shape[2], shape[1] * shape[3]],
+            conv_reshaped = tf.reshape(transposed, [shape[0], -1, shape[1] * shape[3]],
                                        name='reshaped')  # [batch, width, height x features]
 
     return conv_reshaped
@@ -192,7 +192,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
                     if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
             tf.summary.histogram('bias', bias)
 
-        lstm_out = tf.reshape(fc_out, [-1, shape[1], nClasses], name='reshape_out')  # [batch, width, n_classes]
+        lstm_out = tf.reshape(fc_out, [shape[0], -1, nClasses], name='reshape_out')  # [batch, width, n_classes]
 
         rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
 
@@ -206,8 +206,9 @@ def crnn_fn(features, labels, mode, params):
     """
     :param features: dict {
                             'images'
-                            'rnn_seq_length'
-                            'target_seq_length' }
+                            'images_widths'
+                            #'filenames'
+                            }
     :param labels: labels. flattend (1D) array with encoded label (one code per character)
     :param mode:
     :param params: dict {
@@ -337,7 +338,7 @@ def crnn_fn(features, labels, mode, params):
 
         pred_chars = table_int2str.lookup(sparse_code_pred)
         predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
-        predictions_dict['filenames'] = features['filenames']
+        # predictions_dict['filenames'] = features['filenames']
 
         if mode == tf.estimator.ModeKeys.EVAL:
             with tf.name_scope('evaluation'):
@@ -349,11 +350,19 @@ def crnn_fn(features, labels, mode, params):
                                    'CER': CER,
                                    }
 
+    # Export outputs
+    export_outputs = dict()
+    export_outputs['predictions'] = tf.estimator.export.PredictOutput({'words': predictions_dict['words'],
+                                                                       'difference_logprob':
+                                                                           predictions_dict['difference_logprob']
+                                                                       })
+
     return tf.estimator.EstimatorSpec(
         mode=mode,
         predictions=predictions_dict,
         loss=loss_ctc,
         train_op=train_op,
         eval_metric_ops=eval_metric_ops,
+        export_outputs=export_outputs,
         # scaffold=tf.train.Scaffold(init_fn=None)  # Specify init_fn to restore from previous model
     )

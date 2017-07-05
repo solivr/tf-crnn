@@ -140,7 +140,7 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
     # Resize
     elif resized_size:
         image = tf.image.resize_images(image, size=resized_size)
-        img_width = round(resized_size[1]/4) - 1
+        img_width = tf.shape(image)[1]
 
     return image, img_width
 
@@ -211,3 +211,30 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), d
 #
 #     return input_fn
 
+
+def preprocess_image_for_prediction(fixed_height=32):
+
+    def serving_input_fn():
+        # define placeholder for input image
+        image = tf.placeholder(dtype=tf.float32, shape=[None, None, 1])
+
+        shape = tf.shape(image)
+        # Assert shape is h x w x c with c = 1
+
+        ratio = tf.divide(shape[1], shape[0])
+        increment = 2
+        new_width = tf.cast(tf.round((ratio * fixed_height) / increment) * increment, tf.int32)
+
+        resized_image = tf.image.resize_images(image, size=(fixed_height, new_width))
+
+        # Features to serve
+        features = {'images': resized_image[None],  # cast to 1 x h x w x c
+                    'images_widths': new_width[None] # cast to
+                    }
+
+        # Inputs received
+        receiver_inputs = {'images': image}
+
+        return tf.estimator.export.ServingInputReceiver(features, receiver_inputs)
+
+    return serving_input_fn
