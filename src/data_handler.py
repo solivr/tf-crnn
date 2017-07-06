@@ -212,7 +212,7 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), d
 #     return input_fn
 
 
-def preprocess_image_for_prediction(fixed_height=32):
+def preprocess_image_for_prediction(fixed_height=32, min_width=8):
 
     def serving_input_fn():
         # define placeholder for input image
@@ -225,11 +225,17 @@ def preprocess_image_for_prediction(fixed_height=32):
         increment = 2
         new_width = tf.cast(tf.round((ratio * fixed_height) / increment) * increment, tf.int32)
 
-        resized_image = tf.image.resize_images(image, size=(fixed_height, new_width))
+        min_width_t = tf.constant(min_width, dtype=tf.int32)
+        resized_image = tf.cond(new_width < min_width_t,
+                                true_fn=lambda: tf.image.resize_images(image, size=(fixed_height, min_width)),
+                                false_fn=lambda: tf.image.resize_images(image, size=(fixed_height, new_width))
+                                )
+
+        # resized_image = tf.image.resize_images(image, size=(fixed_height, new_width))
 
         # Features to serve
         features = {'images': resized_image[None],  # cast to 1 x h x w x c
-                    'images_widths': new_width[None] # cast to
+                    'images_widths': new_width[None]  # cast to
                     }
 
         # Inputs received
