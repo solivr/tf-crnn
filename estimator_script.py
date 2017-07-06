@@ -102,3 +102,12 @@ if __name__ == '__main__':
 # Export model
 # estimator.export_savedmodel('./exported_models/',
 #                            serving_input_receiver_fn= preprocess_image_for_prediction())
+
+
+# To get input and output dicts when 'restoring' saved_model
+# def _signature_def_to_tensors(signature_def):
+#     g = tf.get_default_graph()
+#     return {k: g.get_tensor_by_name(v.name) for k,v in signature_def.inputs.items()}, \
+#            {k: g.get_tensor_by_name(v.name) for k,v in signature_def.outputs.items()}
+
+# to see all : saved_model_cli show --dir . --all

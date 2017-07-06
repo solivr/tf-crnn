@@ -253,6 +253,10 @@ def crnn_fn(features, labels, mode, params):
         logprob = logprob - tf.constant(mask, dtype=tf.float32)
 
     predictions_dict = {'prob': logprob, 'raw_predictions': raw_pred}
+    try:
+        predictions_dict['filenames'] = features['filenames']
+    except KeyError:
+        pass
 
     blank_label_code = 36
     if not mode == tf.estimator.ModeKeys.PREDICT:
@@ -338,7 +342,6 @@ def crnn_fn(features, labels, mode, params):
 
         pred_chars = table_int2str.lookup(sparse_code_pred)
         predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
-        # predictions_dict['filenames'] = features['filenames']
 
         if mode == tf.estimator.ModeKeys.EVAL:
             with tf.name_scope('evaluation'):
