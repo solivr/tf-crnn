@@ -233,6 +233,7 @@ def crnn_fn(features, labels, mode, params):
 
     # Initialization
     eval_metric_ops = dict()
+    export_outputs = dict()
     loss_ctc = None
     train_op = None
 
@@ -252,7 +253,11 @@ def crnn_fn(features, labels, mode, params):
         mask = n_digits*[0] + (n_chars - n_digits - 1)*[100] + [0]
         logprob = logprob - tf.constant(mask, dtype=tf.float32)
 
-    predictions_dict = {'prob': logprob, 'raw_predictions': raw_pred}
+    predictions_dict = {'prob': logprob,
+                        'raw_predictions': raw_pred,
+                        # 'words': None,
+                        # 'difference_logprob': None
+                        }
     try:
         predictions_dict['filenames'] = features['filenames']
     except KeyError:
@@ -353,12 +358,11 @@ def crnn_fn(features, labels, mode, params):
                                    'CER': CER,
                                    }
 
-    # Export outputs
-    export_outputs = dict()
-    export_outputs['predictions'] = tf.estimator.export.PredictOutput({'words': predictions_dict['words'],
-                                                                       'difference_logprob':
-                                                                           predictions_dict['difference_logprob']
-                                                                       })
+        # Export outputs
+        export_outputs['predictions'] = tf.estimator.export.PredictOutput({'words': predictions_dict['words'],
+                                                                           'difference_logprob':
+                                                                               predictions_dict['difference_logprob']
+                                                                           })
 
     return tf.estimator.EstimatorSpec(
         mode=mode,
