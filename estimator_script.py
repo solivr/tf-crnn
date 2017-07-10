@@ -9,6 +9,7 @@ import better_exceptions
 import tensorflow as tf
 from src.model_estimator import crnn_fn
 from src.data_handler import data_loader
+from .src.data_handler import preprocess_image_for_prediction
 
 from src.config import Conf
 
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (rms, ada, adam)', default='rms')
     parser.add_argument('-f', '--csv_file', type=str, help='CSV filename (without _{train, val, test}.csv extension)', default=None)
     parser.add_argument('-s', '--dataset_dir', type=str, help='Dataset directory ', default=None)
+    parser.add_argument('-e', '--export_dir', type=str, help='Export model directoy', default=None)
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -98,6 +100,16 @@ if __name__ == '__main__':
                                steps=3)
     except KeyboardInterrupt:
         print('Interrupted')
+        if args.export:
+            estimator.export_savedmodel(args.export,
+                                        serving_input_receiver_fn=preprocess_image_for_prediction())
+            print('Exported model to {}'.format(args.export))
+
+    if args.export:
+        estimator.export_savedmodel(args.export,
+                                    serving_input_receiver_fn=preprocess_image_for_prediction())
+        print('Exported model to {}'.format(args.export))
+
 
 # Export model
 # estimator.export_savedmodel('./exported_models/',
