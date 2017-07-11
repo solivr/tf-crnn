@@ -127,8 +127,6 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
                     true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
                     false_fn=lambda: tf.image.decode_png(image_content, channels=1))
 
-    assert_op = tf.Assert(tf.equal(tf.size(image), 0), [image])
-
     # Data augmentation
     if data_augmentation:
         image = augment_data(image)
