@@ -4,6 +4,7 @@ __author__ = 'solivr'
 import argparse
 import os
 import csv
+import numpy as np
 import better_exceptions
 
 import tensorflow as tf
@@ -33,13 +34,12 @@ if __name__ == '__main__':
     conf = Conf(n_classes=37,
                 train_batch_size=128,
                 eval_batch_size=1000,
-                learning_rate=0.001,  # 0.001 for adadelta
+                learning_rate=0.001,  # 0.001 recommended
                 decay_rate=0.9,
                 max_epochs=50,
                 eval_interval=1000,
                 save_interval=10000,
                 input_shape=(32, 100),
-                # max_len=24
                 )
 
     filenames_train = args.csv_files_train
@@ -51,8 +51,7 @@ if __name__ == '__main__':
         'optimizer': args.optimizer,
         'decay_rate': conf.decay_rate,
         'decay_steps': 10000,
-        # 'max_length': conf.maxLength,
-        'digits_only': True
+        'digits_only': True         # change to false to use all alphabet a-z
     }
 
     # Config estimator
@@ -62,7 +61,7 @@ if __name__ == '__main__':
     est_config._save_checkpoints_steps = conf.saveInterval
     est_config._session_config = config_sess
     est_config._save_checkpoints_secs = None
-    est_config._save_summary_steps = 5000
+    est_config._save_summary_steps = 1000
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,
@@ -71,7 +70,7 @@ if __name__ == '__main__':
                                        )
 
     try:
-        # Count number of filenames in csv
+        # Count number of image filenames in csv
         n_samples = 0
         for file in filenames_train:
             with open(file, 'r') as csvfile:
@@ -81,14 +80,14 @@ if __name__ == '__main__':
         # train_steps = conf.evalInterval
         # glb_step = 0
         while True:
-            # Train for 10K steps and then evaluate
+            # Train for approximately 1 epoch and then evaluate
             estimator.train(input_fn=data_loader(csv_filename=filenames_train,
                                                  # cursor=(glb_step * conf.trainBatchSize) % n_samples,
                                                  batch_size=conf.trainBatchSize,
                                                  input_shape=model_params['input_shape'],
                                                  num_epochs=conf.maxEpochs,
                                                  data_augmentation=True),
-                            steps=n_samples)
+                            steps=np.floor(n_samples/conf.trainBatchSize))
             # glb_step += train_steps
             estimator.evaluate(input_fn=data_loader(csv_filename=filenames_eval,
                                                     batch_size=conf.evalBatchSize,
@@ -99,24 +98,10 @@ if __name__ == '__main__':
         print('Interrupted')
         if args.export:
             estimator.export_savedmodel(args.export,
-                                        serving_input_receiver_fn=preprocess_image_for_prediction())
+                                        serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
             print('Exported model to {}'.format(args.export))
 
     if args.export:
         estimator.export_savedmodel(args.export,
-                                    serving_input_receiver_fn=preprocess_image_for_prediction())
+                                    serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
         print('Exported model to {}'.format(args.export))
-
-
-# Export model
-# estimator.export_savedmodel('./exported_models/',
-#                            serving_input_receiver_fn= preprocess_image_for_prediction())
-
-
-# To get input and output dicts when 'restoring' saved_model
-# def _signature_def_to_tensors(signature_def):
-#     g = tf.get_default_graph()
-#     return {k: g.get_tensor_by_name(v.name) for k,v in signature_def.inputs.items()}, \
-#            {k: g.get_tensor_by_name(v.name) for k,v in signature_def.outputs.items()}
-
-# to see all : saved_model_cli show --dir . --all

@@ -8,17 +8,18 @@ class Conf:
                  learning_rate=0.001,
                  decay_rate=0.96,
                  decay_steps='1000',
-                 optimizer='rms',
+                 optimizer='adam',
                  eval_batch_size=200,
                  max_iteration=10000,
                  max_epochs=50,
                  eval_interval=100,
                  save_interval=1000,
                  model_dir=None,
-                 data_set='../data',
-                 max_len=24,
+                 # data_set='../data',
+                 # max_len=24,
                  input_shape=[32, 100],
-                 list_n_hidden=[256, 256]):
+                 # list_n_hidden=[256, 256]
+                 ):
         self.nClasses = n_classes
         self.trainBatchSize = train_batch_size
         self.learning_rate = learning_rate
@@ -31,13 +32,13 @@ class Conf:
         self.evalInterval = eval_interval
         self.saveInterval = save_interval
         self.modelDir = model_dir
-        self.dataSet = data_set
-        self.maxLength = max_len
+        # self.dataSet = data_set
+        # self.maxLength = max_len
         self.inputShape = input_shape
-        self.imgH = self.inputShape[0]
-        self.imgW = self.inputShape[1]
-        try:
-            self.imgC = self.inputShape[2]
-        except IndexError:
-            self.imgC = 1
-        self.listNHidden = list_n_hidden
+        # self.imgH = self.inputShape[0]
+        # self.imgW = self.inputShape[1]
+        # try:
+        #     self.imgC = self.inputShape[2]
+        # except IndexError:
+        #     self.imgC = 1
+        # self.listNHidden = list_n_hidden

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
 
-import os
 import tensorflow as tf
 import numpy as np
 
@@ -22,7 +21,13 @@ def random_rotation(img, max_rotation=0.1, crop=True):
             new_h, new_w = tf.cond(h > w, lambda: [new_l, new_s], lambda: [new_s, new_l])
             new_h, new_w = tf.cast(new_h, tf.int32), tf.cast(new_w, tf.int32)
             bb_begin = tf.cast(tf.ceil((h-new_h)/2), tf.int32), tf.cast(tf.ceil((w-new_w)/2), tf.int32)
-            rotated_image = rotated_image[bb_begin[0]:h-bb_begin[0], bb_begin[1]:w-bb_begin[1], :]
+            rotated_image_crop = rotated_image[bb_begin[0]:h - bb_begin[0], bb_begin[1]:w - bb_begin[1], :]
+
+            # If crop removes the entire image, keep the original image
+            rotated_image = tf.cond(tf.equal(tf.size(rotated_image_crop), 0),
+                                    true_fn=lambda: img,
+                                    false_fn=lambda: rotated_image_crop)
+
         return rotated_image
 
 
@@ -185,35 +190,13 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), d
     return input_fn
 
 
-# def data_loader_from_list_filenames(list_filenames, batch_size=128, input_shape=[32, 100], data_augmentation=False,
-#                                     num_epochs=None):
-#
-#     def input_fn():
-#         # Choose case one csv file or list of csv files
-#         if not isinstance(list_filenames, list):
-#             filename_queue = tf.train.string_input_producer([list_filenames], num_epochs=num_epochs)
-#         elif isinstance(list_filenames, list):
-#             filename_queue = tf.train.string_input_producer(list_filenames, num_epochs=num_epochs)
-#         else:
-#             raise TypeError
-#
-#         full_path = filename_queue.dequeue()
-#
-#         image = image_reading(full_path, resized_size=input_shape, data_augmentation=data_augmentation)
-#
-#         # Batch
-#         img_batch, filenames_batch = tf.train.batch([image, full_path], batch_size=batch_size, num_threads=15,
-#                                                     capacity=3000, dynamic_pad=False, allow_smaller_final_batch=True)
-#         # img_batch, filenames_batch = tf.train.shuffle_batch([image, full_path], batch_size=batch_size,
-#         #                                                     num_threads=15, capacity=3000, dynamic_pad=False,
-#         #                                                     allow_smaller_final_batch=True)
-#
-#         return {'images': img_batch, 'filenames': filenames_batch}
-#
-#     return input_fn
-
-
 def preprocess_image_for_prediction(fixed_height=32, min_width=8):
+    """
+    Input function to use when exporting the model for making predictions (see estimator.export_savedmodel)
+    :param fixed_height: height of the input image after resizing
+    :param min_width: minimum width of image after resizing
+    :return:
+    """
 
     def serving_input_fn():
         # define placeholder for input image
@@ -232,11 +215,9 @@ def preprocess_image_for_prediction(fixed_height=32, min_width=8):
                                 false_fn=lambda: tf.image.resize_images(image, size=(fixed_height, new_width))
                                 )
 
-        # resized_image = tf.image.resize_images(image, size=(fixed_height, new_width))
-
         # Features to serve
         features = {'images': resized_image[None],  # cast to 1 x h x w x c
-                    'images_widths': new_width[None]  # cast to
+                    'images_widths': new_width[None]  # cast to tensor
                     }
 
         # Inputs received

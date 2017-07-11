@@ -207,7 +207,7 @@ def crnn_fn(features, labels, mode, params):
     :param features: dict {
                             'images'
                             'images_widths'
-                            #'filenames'
+                            'filenames'
                             }
     :param labels: labels. flattend (1D) array with encoded label (one code per character)
     :param mode:
@@ -218,7 +218,6 @@ def crnn_fn(features, labels, mode, params):
                             'optimizer'
                             'decay_steps'
                             'decay_rate'
-                            'max_length'
                             'digits_only'  (for predicting digits only)
                         }
     :return:
@@ -246,6 +245,7 @@ def crnn_fn(features, labels, mode, params):
     n_pools = 2 * 2  # 2x2 pooling in dimension W on layer 1 and 2
     seq_len_inputs = tf.divide(features['images_widths'], n_pools, name='seq_len_input_op') - 1
 
+    # If working with digits, add negative offset on a-z characters
     if params['digits_only']:
         # Create array to substract
         n_chars = 37
@@ -255,14 +255,13 @@ def crnn_fn(features, labels, mode, params):
 
     predictions_dict = {'prob': logprob,
                         'raw_predictions': raw_pred,
-                        # 'words': None,
-                        # 'difference_logprob': None
                         }
     try:
         predictions_dict['filenames'] = features['filenames']
     except KeyError:
         pass
 
+    # >>>> Alphabet should be outside of the model...
     blank_label_code = 36
     if not mode == tf.estimator.ModeKeys.PREDICT:
         # Alphabet and codes
@@ -270,7 +269,7 @@ def crnn_fn(features, labels, mode, params):
         keys = [c for c in alphabet]
         values = list(range(blank_label_code)) + list(range(10, blank_label_code + 1))
 
-        # Convert string to code
+        # Convert string label to code label
         with tf.name_scope('str2code_conversion'):
             table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
             splited = tf.string_split(labels, delimiter='')
@@ -287,6 +286,7 @@ def crnn_fn(features, labels, mode, params):
                                           blank_label=blank_label_code)
         loss_ctc = tf.reduce_mean(loss_ctc)
 
+        # >>> Getting instable results with this function, using Baidu's version for now
         # loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
         #                           inputs=predictions_dict['prob'],
         #                           sequence_length=tf.cast(sequence_lengths, tf.int32),
@@ -298,7 +298,7 @@ def crnn_fn(features, labels, mode, params):
 
         # Create an ExponentialMovingAverage object
         ema = tf.train.ExponentialMovingAverage(decay=0.99)
-        # Create the shadow variables, and add ops to maintain moving averages
+        # Create the shadow variables, and add op to maintain moving averages
         maintain_averages_op = ema.apply([loss_ctc])
         loss_ema = ema.average(loss_ctc)
 
@@ -317,8 +317,8 @@ def crnn_fn(features, labels, mode, params):
         elif params['optimizer'] == 'rms':
             optimizer = tf.train.RMSPropOptimizer(learning_rate)
         else:
-            print('Error, no optimizer. RMS by default.')
-            optimizer = tf.train.RMSPropOptimizer(learning_rate)
+            print('Error, no optimizer. ADAM by default.')
+            optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops + [maintain_averages_op]):
@@ -339,7 +339,7 @@ def crnn_fn(features, labels, mode, params):
                                                                               beam_width=100,
                                                                               top_paths=2)
         sparse_code_pred = sparse_code_pred[0]
-        # Find a way to estimate the confidence in the prediction
+        # >>> Find a way to estimate the confidence in the prediction
         predictions_dict['difference_logprob'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
         # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
 

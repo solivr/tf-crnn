@@ -55,3 +55,5 @@ if __name__ == '__main__':
 #     loaded_model = tf.saved_model.loader.load(sess, ["serve"], './exported_models/1499264748/')
 #     input_dict, output_dict =_signature_def_to_tensors(loaded_model.signature_def['predictions'])
 #     out = sess.run(output_dict, feed_dict={input_dict['images']: img_test[:,:,None]})
+
+# to see all : saved_model_cli show --dir . --all
