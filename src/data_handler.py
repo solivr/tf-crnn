@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
 
-import os
 import tensorflow as tf
 import numpy as np
 
@@ -22,7 +21,12 @@ def random_rotation(img, max_rotation=0.1, crop=True):
             new_h, new_w = tf.cond(h > w, lambda: [new_l, new_s], lambda: [new_s, new_l])
             new_h, new_w = tf.cast(new_h, tf.int32), tf.cast(new_w, tf.int32)
             bb_begin = tf.cast(tf.ceil((h-new_h)/2), tf.int32), tf.cast(tf.ceil((w-new_w)/2), tf.int32)
-            rotated_image = rotated_image[bb_begin[0]:h-bb_begin[0], bb_begin[1]:w-bb_begin[1], :]
+            rotated_image_crop = rotated_image[bb_begin[0]:h - bb_begin[0], bb_begin[1]:w - bb_begin[1], :]
+
+            rotated_image = tf.cond(tf.equal(tf.size(rotated_image_crop), 0),
+                                    true_fn=lambda: rotated_image,
+                                    false_fn=lambda: rotated_image_crop)
+
         return rotated_image
 
 
