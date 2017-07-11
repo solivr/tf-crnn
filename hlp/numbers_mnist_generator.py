@@ -32,7 +32,7 @@ def generate_random_image_numbers(mnist_dir, dataset, output_dir, csv_filename, 
     list_labels = list()
 
     for i in tqdm(range(n_numbers), total=n_numbers):
-        n_digits = random.randint(3, 6)
+        n_digits = random.randint(3, 8)
         digits, labels = dataset.next_batch(n_digits)
         # Reshape to have 28x28 image
         square_digits = np.reshape(digits, [-1, 28, 28])
@@ -43,7 +43,7 @@ def generate_random_image_numbers(mnist_dir, dataset, output_dir, csv_filename, 
         # chans3 = np.dstack([stacked_number]*3)
 
         # Save image number
-        img_filename = '{}.jpg'.format(stacked_label)
+        img_filename = '{:09}_{}.jpg'.format(i, stacked_label)
         img_path = os.path.join(output_dir_img, img_filename)
         scipy.misc.imsave(img_path, stacked_number)
 
