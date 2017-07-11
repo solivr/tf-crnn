@@ -9,7 +9,7 @@ import better_exceptions
 import tensorflow as tf
 from src.model_estimator import crnn_fn
 from src.data_handler import data_loader
-from .src.data_handler import preprocess_image_for_prediction
+from src.data_handler import preprocess_image_for_prediction
 
 from src.config import Conf
 
@@ -17,9 +17,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--output_dir', type=str, help='Directory for output', default='./estimator')
     parser.add_argument('-g', '--gpu', type=str, help='GPU 0,1 or '' ', default='')
-    parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (rms, ada, adam)', default='rms')
-    parser.add_argument('-f', '--csv_file', type=str, help='CSV filename (without _{train, val, test}.csv extension)', default=None)
-    parser.add_argument('-s', '--dataset_dir', type=str, help='Dataset directory ', default=None)
+    parser.add_argument('-o', '--optimizer', type=str, help='Optimizer (rms, ada, adam)', default='adam')
+    parser.add_argument('-ft', '--csv_files_train', type=str, help='CSV filename for training',
+                        nargs='*', default=None)
+    parser.add_argument('-fe', '--csv_files_eval', type=str, help='CSV filename for evaluation',
+                        nargs='*', default=None)
     parser.add_argument('-e', '--export_dir', type=str, help='Export model directoy', default=None)
     args = parser.parse_args()
 
@@ -35,21 +37,13 @@ if __name__ == '__main__':
                 decay_rate=0.9,
                 max_epochs=50,
                 eval_interval=1000,
-                save_interval=5000,
-                # data_set='/scratch/sofia/synth-data/90kDICT32px/',
-                # data_set='/scratch/sofia/synth-data/IIIT-data/IIIT-HWS-Dataset/groundtruth/',
-                data_set='/scratch/sofia/vtm_data/',
-                # data_set=args.dataset_dir,
+                save_interval=10000,
                 input_shape=(32, 100),
                 # max_len=24
                 )
 
-    # filename_train = os.path.join(conf.dataSet, 'new_annotation_train.csv')
-    # filename_eval = os.path.join(conf.dataSet, 'new_annotation_val.csv')
-    # filename_train = os.path.abspath(os.path.join(conf.dataSet, 'new_iiit_hw_train.csv'))
-    # filename_eval = os.path.abspath(os.path.join(conf.dataSet, 'new_iiit_hw_val.csv'))
-    filename_train = os.path.abspath(os.path.join(conf.dataSet, 'numbers_train.csv'))
-    filename_eval = os.path.abspath(os.path.join(conf.dataSet, 'numbers_val.csv'))
+    filenames_train = args.csv_files_train
+    filenames_eval = args.csv_files_eval
 
     model_params = {
         'input_shape': conf.inputShape,
@@ -68,7 +62,7 @@ if __name__ == '__main__':
     est_config._save_checkpoints_steps = conf.saveInterval
     est_config._session_config = config_sess
     est_config._save_checkpoints_secs = None
-    est_config._save_summary_steps = 500
+    est_config._save_summary_steps = 5000
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,
@@ -78,26 +72,29 @@ if __name__ == '__main__':
 
     try:
         # Count number of filenames in csv
-        with open(filename_train, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=' ')
-            n_samples = len(list(reader))
+        n_samples = 0
+        for file in filenames_train:
+            with open(file, 'r') as csvfile:
+                reader = csv.reader(csvfile, delimiter=' ')
+                n_samples += len(list(reader))
 
-        train_steps = conf.evalInterval
-        glb_step = 0
+        # train_steps = conf.evalInterval
+        # glb_step = 0
         while True:
             # Train for 10K steps and then evaluate
-            estimator.train(input_fn=data_loader(csv_filename=filename_train,
-                                                 cursor=(glb_step * conf.trainBatchSize) % n_samples,
+            estimator.train(input_fn=data_loader(csv_filename=filenames_train,
+                                                 # cursor=(glb_step * conf.trainBatchSize) % n_samples,
                                                  batch_size=conf.trainBatchSize,
                                                  input_shape=model_params['input_shape'],
                                                  num_epochs=conf.maxEpochs,
                                                  data_augmentation=True),
-                            steps=train_steps)
-            glb_step += train_steps
-            estimator.evaluate(input_fn=data_loader(csv_filename=filename_eval,
+                            steps=n_samples)
+            # glb_step += train_steps
+            estimator.evaluate(input_fn=data_loader(csv_filename=filenames_eval,
                                                     batch_size=conf.evalBatchSize,
-                                                    input_shape=model_params['input_shape']),
-                               steps=3)
+                                                    input_shape=model_params['input_shape'],
+                                                    num_epochs=1),
+                               steps=None)
     except KeyboardInterrupt:
         print('Interrupted')
         if args.export:

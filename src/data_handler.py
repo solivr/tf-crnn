@@ -127,7 +127,7 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
                     true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
                     false_fn=lambda: tf.image.decode_png(image_content, channels=1))
 
-    # tf.Assert(tf.equal(tf.size(image), 0), [image])
+    assert_op = tf.Assert(tf.equal(tf.size(image), 0), [image])
 
     # Data augmentation
     if data_augmentation:
@@ -150,13 +150,15 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), d
     def input_fn():
         # Choose case one csv file or list of csv files
         if not isinstance(csv_filename, list):
-            dirname = os.path.dirname(csv_filename)
+            # dirname = os.path.dirname(csv_filename)
             filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=num_epochs)
         elif isinstance(csv_filename, list):
-            dirname = os.path.dirname(csv_filename[0])
+            # dirname = os.path.dirname(csv_filename[0])
             filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs)
         else:
             raise TypeError
+
+        # dirname = os.path.dirname(filename_queue)
 
         # Skip lines that have already been processed
         reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=cursor)
@@ -166,8 +168,9 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), d
         path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
 
         # Get full path
-        full_dir = dirname
-        full_path = tf.string_join([full_dir, path], separator=os.path.sep)
+        # full_dir = dirname
+        # full_path = tf.string_join([full_dir, path], separator=os.path.sep)
+        full_path = path
 
         image, img_width = image_reading(full_path, resized_size=input_shape,
                                          data_augmentation=data_augmentation, padding=True)
