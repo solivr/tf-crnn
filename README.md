@@ -15,7 +15,7 @@ This version uses the `tf.estimator.Estimator` to build the model.
 
 ### How to
 
-The main script to launch is `train.py`. 
+The main script to launch is `train.py`.
 To train the model, you should input a csv file with each row containing the filename of the image (full path) and its label (plain text) separated by a space :
 
 ```
