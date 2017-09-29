@@ -4,10 +4,7 @@ __author__ = 'solivr'
 import csv
 import os
 import argparse
-try:
-    from tqdm import tqdm
-except ImportError:
-    pass
+from tqdm import tqdm, trange
 
 
 def csv_rel2abs_path_convertor(csv_filenames, delimiter=' ', encoding='utf8'):
@@ -27,7 +24,7 @@ def csv_rel2abs_path_convertor(csv_filenames, delimiter=' ', encoding='utf8'):
         export_filename = os.path.join(absolute_path, '{}_abs{}'.format(*os.path.splitext(basename)))
         with open(export_filename, 'w', encoding='utf8') as f:
             csvwriter = csv.writer(f, delimiter=';')  # TODO change to delimiter
-            for i in tqdm(range(len(relative_paths)), total=len(relative_paths)):
+            for i in trange(0, len(relative_paths)):
                 csvwriter.writerow([os.path.abspath(os.path.join(absolute_path, relative_paths[i])), labels[i]])
 
 

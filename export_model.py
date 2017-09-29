@@ -2,11 +2,14 @@
 __author__ = 'solivr'
 
 from src.data_handler import preprocess_image_for_prediction
-from src.model_estimator import crnn_fn
+from src.model import crnn_fn
 import tensorflow as tf
 import os
 import argparse
-import better_exceptions
+try:
+    import better_exceptions
+except ImportError:
+    pass
 
 
 if __name__ == '__main__':

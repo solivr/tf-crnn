@@ -3,9 +3,48 @@ __author__ = 'solivr'
 
 import tensorflow as tf
 import numpy as np
+import os
+from .config import Params
 
 
-def random_rotation(img, max_rotation=0.1, crop=True):
+def data_loader(csv_filename, params: Params, cursor=0, batch_size=128, data_augmentation=False,
+                num_epochs=None, image_summaries=False):
+
+    def input_fn():
+        # Choose case one csv file or list of csv files
+        if not isinstance(csv_filename, list):
+            # dirname = os.path.dirname(csv_filename)
+            filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=num_epochs)
+        elif isinstance(csv_filename, list):
+            # dirname = os.path.dirname(csv_filename[0])
+            filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs)
+
+        # Skip lines that have already been processed
+        reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=cursor)
+        key, value = reader.read(filename_queue, name='file_reading_op')
+
+        default_line = [['None'], ['None']]
+        path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=params.csv_delimiter,
+                                    name='csv_reading_op')
+
+        image, img_width = image_reading(path, resized_size=params.input_shape,
+                                         data_augmentation=data_augmentation, padding=True)
+
+        to_batch = {'images': image, 'images_widths': img_width, 'filenames': path, 'labels': label}
+        prepared_batch = tf.train.batch(to_batch,
+                                        batch_size=batch_size,
+                                        num_threads=15, capacity=3000,
+                                        dynamic_pad=False)
+
+        if image_summaries:
+            tf.summary.image('input/image', prepared_batch.get('images'), max_outputs=1)
+
+        return prepared_batch, prepared_batch.get('labels')
+
+    return input_fn
+
+
+def random_rotation(img, max_rotation=0.1, crop=True):  # from SeguinBe
     with tf.name_scope('RandomRotation'):
         rotation = tf.random_uniform([], -max_rotation, max_rotation)
         rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
@@ -146,48 +185,6 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
         img_width = tf.shape(image)[1]
 
     return image, img_width
-
-
-def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), data_augmentation=False, num_epochs=None):
-
-    def input_fn():
-        # Choose case one csv file or list of csv files
-        if not isinstance(csv_filename, list):
-            # dirname = os.path.dirname(csv_filename)
-            filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=num_epochs)
-        elif isinstance(csv_filename, list):
-            # dirname = os.path.dirname(csv_filename[0])
-            filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs)
-        else:
-            raise TypeError
-
-        # dirname = os.path.dirname(filename_queue)
-
-        # Skip lines that have already been processed
-        reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=cursor)
-        key, value = reader.read(filename_queue, name='file_reading_op')
-
-        default_line = [['None'], ['None']]
-        path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
-
-        # Get full path
-        # full_dir = dirname
-        # full_path = tf.string_join([full_dir, path], separator=os.path.sep)
-        full_path = path
-
-        image, img_width = image_reading(full_path, resized_size=input_shape,
-                                         data_augmentation=data_augmentation, padding=True)
-
-        # Batch
-        img_batch, label_batch, filenames_batch, img_width_batch = tf.train.batch([image, label, full_path, img_width],
-                                                                                  batch_size=batch_size,
-                                                                                  num_threads=15, capacity=3000,
-                                                                                  dynamic_pad=False)
-
-        return {'images': img_batch, 'images_widths': img_width_batch, 'filenames': filenames_batch}, \
-               label_batch
-
-    return input_fn
 
 
 def preprocess_image_for_prediction(fixed_height=32, min_width=8):
