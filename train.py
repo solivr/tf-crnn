@@ -23,7 +23,9 @@ if __name__ == '__main__':
                         nargs='*', default=None)
     parser.add_argument('-fe', '--csv_files_eval', type=str, help='CSV filename for evaluation',
                         nargs='*', default=None)
-    parser.add_argument('-o', '--output_model_dir', required=True, type=str, help='Directory for output', default='./estimator')
+    parser.add_argument('-o', '--output_model_dir', required=True, type=str,
+                        help='Directory for output', default='./estimator')
+    parser.add_argument('-n', '--nb-epochs', type=int, default=30, help='Number of epochs')
     parser.add_argument('-g', '--gpu', type=str, help='GPU 0,1 or '' ', default='')
     args = vars(parser.parse_args())
 
@@ -85,16 +87,16 @@ if __name__ == '__main__':
         while True:
             # Train for approximately 1 epoch and then evaluate
             estimator.train(input_fn=data_loader(csv_filename=parameters.csv_files_train,
+                                                 params=parameters,
                                                  # cursor=(glb_step * conf.trainBatchSize) % n_samples,
                                                  batch_size=parameters.train_batch_size,
-                                                 input_shape=parameters.input_shape,
-                                                 num_epochs=parameters.max_epochs,
+                                                 num_epochs=parameters.n_epochs,
                                                  data_augmentation=True),
                             steps=np.floor(n_samples / parameters.train_batch_size))
             # glb_step += train_steps
             estimator.evaluate(input_fn=data_loader(csv_filename=parameters.csv_files_eval,
+                                                    params=parameters,
                                                     batch_size=parameters.eval_batch_size,
-                                                    input_shape=model_params['input_shape'],
                                                     num_epochs=1),
                                steps=None)
     except KeyboardInterrupt:

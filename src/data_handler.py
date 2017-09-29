@@ -3,9 +3,11 @@ __author__ = 'solivr'
 
 import tensorflow as tf
 import numpy as np
+import os
+from .config import Params
 
 
-def random_rotation(img, max_rotation=0.1, crop=True):
+def random_rotation(img, max_rotation=0.1, crop=True):  # from SeguinBe
     with tf.name_scope('RandomRotation'):
         rotation = tf.random_uniform([], -max_rotation, max_rotation)
         rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
@@ -148,7 +150,7 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
     return image, img_width
 
 
-def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), data_augmentation=False, num_epochs=None):
+def data_loader(csv_filename, params: Params, cursor=0, batch_size=128, data_augmentation=False, num_epochs=None):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -158,24 +160,21 @@ def data_loader(csv_filename, cursor=0, batch_size=128, input_shape=(32, 100), d
         elif isinstance(csv_filename, list):
             # dirname = os.path.dirname(csv_filename[0])
             filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs)
-        else:
-            raise TypeError
-
-        # dirname = os.path.dirname(filename_queue)
 
         # Skip lines that have already been processed
         reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=cursor)
         key, value = reader.read(filename_queue, name='file_reading_op')
 
         default_line = [['None'], ['None']]
-        path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=' ', name='csv_reading_op')
+        path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=params.csv_delimiter,
+                                    name='csv_reading_op')
 
         # Get full path
         # full_dir = dirname
         # full_path = tf.string_join([full_dir, path], separator=os.path.sep)
         full_path = path
 
-        image, img_width = image_reading(full_path, resized_size=input_shape,
+        image, img_width = image_reading(full_path, resized_size=params.input_shape,
                                          data_augmentation=data_augmentation, padding=True)
 
         # Batch

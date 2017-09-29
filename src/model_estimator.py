@@ -7,6 +7,7 @@ import warpctc_tensorflow
 from tensorflow.contrib.rnn import BasicLSTMCell
 
 from .decoding import get_words_from_chars
+from .config import Params
 
 
 def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
@@ -153,7 +154,7 @@ def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
     return conv_reshaped
 
 
-def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
+def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params) -> tf.Tensor:
     # Prepare data shape to match `bidirectional_rnn` function requirements
     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
 
@@ -173,7 +174,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: dict) -> tf.Tensor:
                                                                         )
 
         # Dropout layer
-        lstm_net = tf.nn.dropout(lstm_net, keep_prob=params['keep_prob'])
+        lstm_net = tf.nn.dropout(lstm_net, keep_prob=params.keep_prob_dropout)
 
         with tf.variable_scope('Reshaping_rnn'):
             shape = lstm_net.get_shape().as_list()  # [batch, width, 2*n_hidden]
@@ -212,23 +213,18 @@ def crnn_fn(features, labels, mode, params):
     :param labels: labels. flattend (1D) array with encoded label (one code per character)
     :param mode:
     :param params: dict {
-                            'input_shape'
-                            'keep_prob'
-                            'starting_learning_rate'
-                            'optimizer'
-                            'decay_steps'
-                            'decay_rate'
-                            'digits_only'  (for predicting digits only)
+                            'Params'
                         }
     :return:
     """
 
-    if mode == 'train':
-        isTraining = True
-        params['keep_prob'] = 0.7
+    parameters = params.get('Params')
+    assert isinstance(parameters, Params)
+
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        parameters.keep_prob_dropout = 0.7
     else:
-        isTraining = False
-        params['keep_prob'] = 1.0
+        parameters.keep_prob_dropout = 1.0
 
     # Initialization
     eval_metric_ops = dict()
@@ -238,15 +234,15 @@ def crnn_fn(features, labels, mode, params):
 
     # tf.summary.image('input_image', features['images'], 3)
 
-    conv = deep_cnn(features['images'], isTraining)
-    logprob, raw_pred = deep_bidirectional_lstm(conv, params=params)  # params: rnn_seq_length, keep_prob
+    conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN))
+    logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters)  # params: rnn_seq_length, keep_prob
 
     # Compute seq_len from image width
     n_pools = 2 * 2  # 2x2 pooling in dimension W on layer 1 and 2
     seq_len_inputs = tf.divide(features['images_widths'], n_pools, name='seq_len_input_op') - 1
 
     # If working with digits, add negative offset on a-z characters
-    if params['digits_only']:
+    if parameters.digits_only:
         # Create array to substract
         n_chars = 37
         n_digits = 10
@@ -304,21 +300,21 @@ def crnn_fn(features, labels, mode, params):
 
         # Train op
         global_step = tf.train.get_or_create_global_step()
-        learning_rate = tf.train.exponential_decay(params['starting_learning_rate'], global_step, params['decay_steps'],
-                                                   params['decay_rate'], staircase=True)
+        learning_rate = tf.train.exponential_decay(parameters.learning_rate, global_step, parameters.decay_steps,
+                                                   parameters.decay_rate, staircase=True)
 
         tf.summary.scalar('learning_rate', learning_rate)
         tf.summary.scalar('ema_loss', loss_ema)
 
-        if params['optimizer'] == 'ada':
+        if parameters.optimizer == 'ada':
             optimizer = tf.train.AdadeltaOptimizer(learning_rate)
-        elif params['optimizer'] == 'adam':
+        elif parameters.optimizer == 'adam':
             optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
-        elif params['optimizer'] == 'rms':
+        elif parameters.optimizer == 'rms':
             optimizer = tf.train.RMSPropOptimizer(learning_rate)
-        else:
-            print('Error, no optimizer. ADAM by default.')
-            optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
+        # else:
+        #     print('Error, no optimizer. ADAM by default.')
+        #     optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops + [maintain_averages_op]):
