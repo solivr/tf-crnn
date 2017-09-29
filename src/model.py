@@ -232,8 +232,6 @@ def crnn_fn(features, labels, mode, params):
     loss_ctc = None
     train_op = None
 
-    # tf.summary.image('input_image', features['images'], 3)
-
     conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN))
     logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters)  # params: rnn_seq_length, keep_prob
 
@@ -275,6 +273,7 @@ def crnn_fn(features, labels, mode, params):
         seq_lengths_labels = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
 
         # Loss
+        # ----
         loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
                                           flat_labels=sparse_code_target.values,
                                           label_lengths=tf.cast(seq_lengths_labels, tf.int32),
@@ -299,12 +298,10 @@ def crnn_fn(features, labels, mode, params):
         loss_ema = ema.average(loss_ctc)
 
         # Train op
+        # --------
         global_step = tf.train.get_or_create_global_step()
         learning_rate = tf.train.exponential_decay(parameters.learning_rate, global_step, parameters.decay_steps,
                                                    parameters.decay_rate, staircase=True)
-
-        tf.summary.scalar('learning_rate', learning_rate)
-        tf.summary.scalar('ema_loss', loss_ema)
 
         if parameters.optimizer == 'ada':
             optimizer = tf.train.AdadeltaOptimizer(learning_rate)
@@ -320,7 +317,12 @@ def crnn_fn(features, labels, mode, params):
         with tf.control_dependencies(update_ops + [maintain_averages_op]):
             train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
-    # Evaluation ops
+    # Summaries
+    # ---------
+    tf.summary.scalar('learning_rate', learning_rate)
+    tf.summary.scalar('losses/ema_loss', loss_ema)
+    tf.summary.scalar('losses/ctc_loss', loss_ctc)
+
     if not mode == tf.estimator.ModeKeys.TRAIN:
         # Convert code labels to string labels
         with tf.name_scope('code2str_conversion'):
@@ -344,14 +346,16 @@ def crnn_fn(features, labels, mode, params):
         pred_chars = table_int2str.lookup(sparse_code_pred)
         predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
 
+    # Evaluation ops
+    # --------------
         if mode == tf.estimator.ModeKeys.EVAL:
             with tf.name_scope('evaluation'):
                 CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
                 accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
 
                 eval_metric_ops = {
-                                   'accuracy': accuracy,
-                                   'CER': CER,
+                                   'eval/accuracy': accuracy,
+                                   'eval/CER': CER,
                                    }
 
         # Export outputs

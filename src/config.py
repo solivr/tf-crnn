@@ -23,6 +23,7 @@ class Params:
         self._n_epochs = kwargs.get('n_epochs', 50)
         self._max_iteration = kwargs.get('max_iteration', 1e4)
         self._eval_interval = kwargs.get('eval_interval', 100)
+        self._evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
         self._save_interval = kwargs.get('save_interval', 1e3)
         self._input_shape = kwargs.get('input_shape', (32, 100))
         self._digits_only = kwargs.get('digits_only', False)
@@ -141,3 +142,7 @@ class Params:
     @property
     def csv_delimiter(self):
         return self._csv_delimiter
+
+    @property
+    def evaluate_every_epoch(self):
+        return self._evaluate_every_epoch
