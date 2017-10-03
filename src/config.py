@@ -89,6 +89,8 @@ class Params:
 
         assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
 
+        assert self._optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self._optimizer)
+
         self._assign_alphabet(alphabet_decoding_list=Alphabet.DecodingList)
 
     def export_experiment_params(self):
