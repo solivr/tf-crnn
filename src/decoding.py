@@ -17,7 +17,7 @@ def get_words_from_chars(characters_list, sequence_lengths, name='chars_conversi
             return tf.map_fn(my_func, coords, dtype=tf.string)
 
         def coords_single_sequence():
-            return tf.reduce_join(characters_list)
+            return tf.reduce_join(characters_list, keep_dims=True)
 
         words = tf.cond(tf.shape(sequence_lengths)[0] > 1,
                         true_fn=lambda: coords_several_sequences(),
