@@ -6,17 +6,20 @@ import json
 
 
 class Alphabet:
-    BLANK_SYMBOL = '$'
     LettersLowercase = 'abcdefghijklmnopqrstuvwxyz'  # 26
     LettersCapitals = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # 26
     Digits = '0123456789'  # 10
-    Symbols = "'.,:-="  # 6
+    Symbols = " '.,:-="  # 7
+    DecodingList = ['same', 'lowercase']
+
+    BLANK_SYMBOL = '$'
     LETTERS_DIGITS = Digits + LettersCapitals + LettersLowercase + BLANK_SYMBOL
     LETTERS_DIGITS_LOWERCASE = Digits + LettersLowercase + BLANK_SYMBOL
     LETTERS_ONLY = LettersCapitals + LettersLowercase + BLANK_SYMBOL
     LETTERS_ONLY_LOWERCASE = LettersLowercase + BLANK_SYMBOL
     LETTERS_EXTENDED = LettersCapitals + LettersLowercase + Symbols + BLANK_SYMBOL
     LETTERS_EXTENDED_LOWERCASE = LettersLowercase + Symbols + BLANK_SYMBOL
+    # TODO : Maybe add a unique code (unicode?) to each character
 
 
 class Params:
@@ -36,7 +39,6 @@ class Params:
         self._csv_delimiter = kwargs.get('csv_delimiter', ';')
         self._gpu = kwargs.get('gpu', '')
         self._alphabet = kwargs.get('alphabet')
-        # self._nclasses = kwargs.get('n_classes')
         self._csv_files_train = kwargs.get('csv_files_train')
         self._csv_files_eval = kwargs.get('csv_files_eval')
         self._output_model_dir = kwargs.get('output_model_dir')
@@ -44,12 +46,21 @@ class Params:
 
         assert self._optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self._optimizer)
 
-        assert self._alphabet in ['letters_digits', 'letters_only', 'letters_extended'], \
+        self._assign_alphabet(alphabet_decoding_list=Alphabet.DecodingList)
+
+    def export_experiment_params(self):
+        if not os.path.isdir(self.output_model_dir):
+            os.mkdir(self.output_model_dir)
+        with open(os.path.join(self.output_model_dir, 'model_params.json'), 'w') as f:
+            json.dump(vars(self), f)
+
+    def _assign_alphabet(self, alphabet_decoding_list):
+        assert self._alphabet in [Alphabet.LETTERS_DIGITS, Alphabet.LETTERS_ONLY, Alphabet.LETTERS_EXTENDED], \
             'Unknown alphabet {}'.format(self._alphabet)
-        assert self._alphabet_decoding in ['same', 'lowercase'], \
+        assert self._alphabet_decoding in alphabet_decoding_list, \
             'Unknown alphabet decoding {}'.format(self._alphabet_decoding)
-        if self._alphabet == 'letters_digits':
-            self._alphabet = Alphabet.LETTERS_DIGITS
+
+        if self._alphabet == Alphabet.LETTERS_DIGITS:
             if self._alphabet_decoding == 'lowercase':
                 self._alphabet_decoding = Alphabet.LETTERS_DIGITS_LOWERCASE
                 self._alphabet_codes = list(range(len(Alphabet.Digits))) + \
@@ -57,37 +68,38 @@ class Params:
                                                   len(Alphabet.Digits) + len(Alphabet.LettersCapitals))) + \
                                        list(range(len(Alphabet.Digits),
                                                   len(Alphabet.Digits) + len(Alphabet.LettersLowercase) + 1))
+                self._alphabet_decoding_codes = list(range(len(Alphabet.Digits))) + \
+                                                list(range(len(Alphabet.Digits),
+                                                           len(Alphabet.Digits) + len(Alphabet.LettersLowercase) + 1))
                 self._blank_label_code = self._alphabet_codes[-1]
-        elif self._alphabet == 'letters_only':
-            self._alphabet = Alphabet.LETTERS_ONLY
+        elif self._alphabet == Alphabet.LETTERS_ONLY:
             if self._alphabet_decoding == 'lowercase':
                 self._alphabet_decoding = Alphabet.LETTERS_ONLY_LOWERCASE
                 self._alphabet_codes = list(range(len(Alphabet.LettersCapitals))) + \
                                        list(range(len(Alphabet.LettersLowercase) + 1))
+                self._alphabet_decoding_codes = list(range(len(Alphabet.LettersLowercase) + 1))
                 self._blank_label_code = self._alphabet_codes[-1]
-        elif self._alphabet == 'letters_extended':
-            self._alphabet = Alphabet.LETTERS_EXTENDED
+        elif self._alphabet == Alphabet.LETTERS_EXTENDED:
             if self._alphabet_decoding == 'lowercase':
                 self._alphabet_decoding = Alphabet.LETTERS_EXTENDED_LOWERCASE
                 self._alphabet_codes = list(range(len(Alphabet.LettersCapitals))) + \
                                        list(range(len(Alphabet.LettersLowercase))) + \
-                                       list(range(2*len(Alphabet.LettersCapitals),
-                                                  2*len(Alphabet.LettersCapitals) + len(Alphabet.Symbols) + 1))
+                                       list(range(len(Alphabet.LettersCapitals),
+                                                  len(Alphabet.LettersCapitals) + len(Alphabet.Symbols) + 1))
+                self._alphabet_decoding_codes = list(range(len(Alphabet.LettersLowercase))) + \
+                                                list(range(len(Alphabet.LettersCapitals),
+                                                           len(Alphabet.LettersCapitals) + len(Alphabet.Symbols) + 1))
                 self._blank_label_code = self._alphabet_codes[-1]
 
         if self._alphabet_decoding == 'same':
             self._alphabet_decoding = self._alphabet
             self._alphabet_codes = list(range(len(self._alphabet)))
-            self._blank_label_code = len(self._alphabet)
+            self._blank_label_code = self._alphabet_codes[-1]
+            self._alphabet_decoding_codes = self._alphabet_codes
 
         self._nclasses = self._alphabet_codes[-1] + 1
         self._blank_label_symbol = Alphabet.BLANK_SYMBOL
 
-    def export_experiment_params(self):
-        if not os.path.isdir(self.output_model_dir):
-            os.mkdir(self.output_model_dir)
-        with open(os.path.join(self.output_model_dir, 'model_params.json'), 'w') as f:
-            json.dump(vars(self), f)
 
     @property
     def n_classes(self):
@@ -125,10 +137,6 @@ class Params:
     def save_interval(self):
         return self._save_interval
 
-    # @property
-    # def model_dir(self):
-    #     return self._model_dir
-
     @property
     def input_shape(self):
         return self._input_shape
@@ -156,6 +164,10 @@ class Params:
     @property
     def alphabet_decoding(self):
         return self._alphabet_decoding
+
+    @property
+    def alphabet_decoding_codes(self):
+        return self._alphabet_decoding_codes
 
     @property
     def alphabet_codes(self):
