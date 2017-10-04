@@ -5,6 +5,10 @@ import os
 import json
 
 
+class CONST:
+    DIMENSION_REDUCTION_W_POOLING = 2*2  # 2x2 pooling in dimension W on layer 1 and 2
+
+
 class Alphabet:
     LettersLowercase = 'abcdefghijklmnopqrstuvwxyz'  # 26
     LettersCapitals = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # 26
