@@ -1,31 +1,30 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
 
-import numpy as np
-import tensorflow as tf
-import warpctc_tensorflow
-from tensorflow.contrib.rnn import BasicLSTMCell
 
+import tensorflow as tf
+# import warpctc_tensorflow
+from tensorflow.contrib.rnn import BasicLSTMCell
 from .decoding import get_words_from_chars
-from .config import Params
+from .config import Params, CONST
 
 
 def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
-    initW = tf.truncated_normal(shape=shape, mean=mean, stddev=stddev)
-    return tf.Variable(initW, name=name)
+    init_w = tf.truncated_normal(shape=shape, mean=mean, stddev=stddev)
+    return tf.Variable(init_w, name=name)
 
 
 def biasVar(shape, value=0.0, name='bias'):
-    initb = tf.constant(value=value, shape=shape)
-    return tf.Variable(initb, name=name)
+    init_b = tf.constant(value=value, shape=shape)
+    return tf.Variable(init_b, name=name)
 
 
 def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
     return tf.nn.conv2d(input, filter, strides=strides, padding=padding, name=name)
 
 
-def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
-    input_tensor = inputImgs
+def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
+    input_tensor = input_imgs
     if input_tensor.shape[-1] == 1:
         input_channels = 1
     if input_tensor.shape[-1] == 3:
@@ -73,7 +72,7 @@ def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
             conv = conv2d(pool2, W)
             out = tf.nn.bias_add(conv, b)
             b_norm = tf.layers.batch_normalization(out, axis=-1,
-                                                   training=isTraining, name='batch-norm')
+                                                   training=is_training, name='batch-norm')
             conv3 = tf.nn.relu(b_norm, name='ReLU')
 
             weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/weights:0'][0]
@@ -104,7 +103,7 @@ def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
             conv = conv2d(pool4, W)
             out = tf.nn.bias_add(conv, b)
             b_norm = tf.layers.batch_normalization(out, axis=-1,
-                                                   training=isTraining, name='batch-norm')
+                                                   training=is_training, name='batch-norm')
             conv5 = tf.nn.relu(b_norm)
 
             weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/weights:0'][0]
@@ -134,7 +133,7 @@ def deep_cnn(inputImgs: tf.Tensor, isTraining: bool) -> tf.Tensor:
             conv = conv2d(pool6, W, padding='VALID')
             out = tf.nn.bias_add(conv, b)
             b_norm = tf.layers.batch_normalization(out, axis=-1,
-                                                   training=isTraining, name='batch-norm')
+                                                   training=is_training, name='batch-norm')
             conv7 = tf.nn.relu(b_norm)
 
             weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/weights:0'][0]
@@ -158,14 +157,13 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params) -> tf.Tensor:
     # Prepare data shape to match `bidirectional_rnn` function requirements
     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
 
-    listNHidden = [256, 256]
-    nClasses = 37
+    list_n_hidden = [256, 256]
 
     with tf.name_scope('deep_bidirectional_lstm'):
         # Forward direction cells
-        fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in listNHidden]
+        fw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
         # Backward direction cells
-        bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in listNHidden]
+        bw_cell_list = [BasicLSTMCell(nh, forget_bias=1.0) for nh in list_n_hidden]
 
         lstm_net, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(fw_cell_list,
                                                                         bw_cell_list,
@@ -181,8 +179,8 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params) -> tf.Tensor:
             rnn_reshaped = tf.reshape(lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
 
         with tf.variable_scope('fully_connected'):
-            W = weightVar([listNHidden[-1]*2, nClasses])
-            b = biasVar([nClasses])
+            W = weightVar([list_n_hidden[-1]*2, params.n_classes])
+            b = biasVar([params.n_classes])
             fc_out = tf.nn.bias_add(tf.matmul(rnn_reshaped, W), b)
 
             # Summaries
@@ -193,14 +191,14 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params) -> tf.Tensor:
                     if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
             tf.summary.histogram('bias', bias)
 
-        lstm_out = tf.reshape(fc_out, [shape[0], -1, nClasses], name='reshape_out')  # [batch, width, n_classes]
+        lstm_out = tf.reshape(fc_out, [shape[0], -1, params.n_classes], name='reshape_out')  # [batch, width, n_classes]
 
-        rawPred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
+        raw_pred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
 
         # Swap batch and time axis
         lstm_out = tf.transpose(lstm_out, [1, 0, 2], name='transpose_time_major')  # [width(time), batch, n_classes]
 
-        return lstm_out, rawPred
+        return lstm_out, raw_pred
 
 
 def crnn_fn(features, labels, mode, params):
@@ -226,26 +224,12 @@ def crnn_fn(features, labels, mode, params):
     else:
         parameters.keep_prob_dropout = 1.0
 
-    # Initialization
-    eval_metric_ops = dict()
-    export_outputs = dict()
-    loss_ctc = None
-    train_op = None
-
     conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN))
     logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters)  # params: rnn_seq_length, keep_prob
 
     # Compute seq_len from image width
-    n_pools = 2 * 2  # 2x2 pooling in dimension W on layer 1 and 2
+    n_pools = CONST.DIMENSION_REDUCTION_W_POOLING  # 2x2 pooling in dimension W on layer 1 and 2
     seq_len_inputs = tf.divide(features['images_widths'], n_pools, name='seq_len_input_op') - 1
-
-    # If working with digits, add negative offset on a-z characters
-    if parameters.digits_only:
-        # Create array to substract
-        n_chars = 37
-        n_digits = 10
-        mask = n_digits*[0] + (n_chars - n_digits - 1)*[100] + [0]
-        logprob = logprob - tf.constant(mask, dtype=tf.float32)
 
     predictions_dict = {'prob': logprob,
                         'raw_predictions': raw_pred,
@@ -255,13 +239,10 @@ def crnn_fn(features, labels, mode, params):
     except KeyError:
         pass
 
-    # >>>> Alphabet should be outside of the model...
-    blank_label_code = 36
     if not mode == tf.estimator.ModeKeys.PREDICT:
         # Alphabet and codes
-        alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-'
-        keys = [c for c in alphabet]
-        values = list(range(blank_label_code)) + list(range(10, blank_label_code + 1))
+        keys = [c for c in parameters.alphabet]
+        values = parameters.alphabet_codes
 
         # Convert string label to code label
         with tf.name_scope('str2code_conversion'):
@@ -270,26 +251,27 @@ def crnn_fn(features, labels, mode, params):
             codes = table_str2int.lookup(splited.values)
             sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
 
-        seq_lengths_labels = tf.segment_max(sparse_code_target.indices[:, 1], sparse_code_target.indices[:, 0]) + 1
+        seq_lengths_labels = tf.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
+                                         minlength=tf.shape(predictions_dict['prob'])[1])
 
         # Loss
         # ----
-        loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
-                                          flat_labels=sparse_code_target.values,
-                                          label_lengths=tf.cast(seq_lengths_labels, tf.int32),
-                                          input_lengths=tf.cast(seq_len_inputs, dtype=tf.int32),
-                                          blank_label=blank_label_code)
-        loss_ctc = tf.reduce_mean(loss_ctc)
-
-        # >>> Getting instable results with this function, using Baidu's version for now
-        # loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
-        #                           inputs=predictions_dict['prob'],
-        #                           sequence_length=tf.cast(sequence_lengths, tf.int32),
-        #                           preprocess_collapse_repeated=False,
-        #                           ctc_merge_repeated=True,
-        #                           ignore_longer_outputs_than_inputs=False,
-        #                           time_major=True)
+        # loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
+        #                                   flat_labels=sparse_code_target.values,
+        #                                   label_lengths=tf.cast(seq_lengths_labels, tf.int32),
+        #                                   input_lengths=tf.cast(seq_len_inputs, dtype=tf.int32),
+        #                                   blank_label=parameters.blank_label_code)
         # loss_ctc = tf.reduce_mean(loss_ctc)
+
+        # # >>> Getting instable results with this function, using Baidu's version for now
+        loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
+                                  inputs=predictions_dict['prob'],
+                                  sequence_length=tf.cast(seq_len_inputs, tf.int32),
+                                  preprocess_collapse_repeated=False,
+                                  ctc_merge_repeated=True,
+                                  ignore_longer_outputs_than_inputs=True,
+                                  time_major=True)
+        loss_ctc = tf.reduce_mean(loss_ctc)
 
         # Create an ExponentialMovingAverage object
         ema = tf.train.ExponentialMovingAverage(decay=0.99)
@@ -309,60 +291,72 @@ def crnn_fn(features, labels, mode, params):
             optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
         elif parameters.optimizer == 'rms':
             optimizer = tf.train.RMSPropOptimizer(learning_rate)
-        # else:
-        #     print('Error, no optimizer. ADAM by default.')
-        #     optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops + [maintain_averages_op]):
             train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
-    # Summaries
-    # ---------
-    tf.summary.scalar('learning_rate', learning_rate)
-    tf.summary.scalar('losses/ema_loss', loss_ema)
-    tf.summary.scalar('losses/ctc_loss', loss_ctc)
+        # Summaries
+        # ---------
+        tf.summary.scalar('learning_rate', learning_rate)
+        tf.summary.scalar('losses/ema_loss', loss_ema)
+        tf.summary.scalar('losses/ctc_loss', loss_ctc)
+    else:
+        loss_ctc, train_op = None, None
 
-    if not mode == tf.estimator.ModeKeys.TRAIN:
-        # Convert code labels to string labels
+    if mode in [tf.estimator.ModeKeys.EVAL, tf.estimator.ModeKeys.PREDICT]:
         with tf.name_scope('code2str_conversion'):
-            keys = np.arange(blank_label_code + 1, dtype=np.int64)
-            alphabet_short = '0123456789abcdefghijklmnopqrstuvwxyz-'
-            values = [c for c in alphabet_short]
+            keys = tf.cast(parameters.alphabet_decoding_codes, tf.int64)
+            values = [c for c in parameters.alphabet_decoding]
             table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
 
             sparse_code_pred, log_probability = tf.nn.ctc_beam_search_decoder(predictions_dict['prob'],
                                                                               sequence_length=tf.cast(seq_len_inputs, tf.int32),
-                                                                              merge_repeated=False,  # already merged in ctc_loss
+                                                                              merge_repeated=False,
                                                                               beam_width=100,
                                                                               top_paths=2)
-        sparse_code_pred = sparse_code_pred[0]
-        # >>> Find a way to estimate the confidence in the prediction
-        predictions_dict['difference_logprob'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
-        # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
+            sparse_code_pred = sparse_code_pred[0]
+            # Score
+            predictions_dict['difference_logprob'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
+            # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
 
-        sequence_lengths = tf.segment_max(sparse_code_pred.indices[:, 1], sparse_code_pred.indices[:, 0]) + 1
+            sequence_lengths_pred = tf.bincount(tf.cast(sparse_code_pred.indices[:, 0], tf.int32),
+                                                minlength=tf.shape(predictions_dict['prob'])[1])
 
-        pred_chars = table_int2str.lookup(sparse_code_pred)
-        predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths)
+            pred_chars = table_int2str.lookup(sparse_code_pred)
+            predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths_pred)
+            # >>>>>>>>>
+            # tf.summary.text('sparse_code_indices', tf.as_string(sparse_code_pred.indices[:, 0]))
+            # tf.summary.text('predicted_chars',
+            #                 tf.sparse_to_dense(pred_chars.indices, pred_chars.dense_shape,
+            #                                    pred_chars.values, default_value='+'))
+            # tf.summary.text('sequence_lengths', tf.as_string(sequence_lengths_pred))
+            # tf.summary.text('pred_chars_values', pred_chars.values)
+            # >>>>>>>>>>>
+            tf.summary.text('predicted_words', predictions_dict['words'][:10])
 
     # Evaluation ops
     # --------------
-        if mode == tf.estimator.ModeKeys.EVAL:
-            with tf.name_scope('evaluation'):
-                CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)))
-                accuracy = tf.metrics.accuracy(labels, predictions_dict['words'])
+    if mode == tf.estimator.ModeKeys.EVAL:
+        with tf.name_scope('evaluation'):
+            with tf.control_dependencies([tf.assert_equal(tf.shape(predictions_dict['words']),
+                                                          tf.shape(labels))]):
+                CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
+                accuracy = tf.metrics.accuracy(labels, predictions_dict['words'], name='accuracy')
 
-                eval_metric_ops = {
-                                   'eval/accuracy': accuracy,
-                                   'eval/CER': CER,
-                                   }
+            eval_metric_ops = {
+                               'eval/accuracy': accuracy,
+                               'eval/CER': CER,
+                               }
+    else:
+        eval_metric_ops = None
 
-        # Export outputs
-        export_outputs['predictions'] = tf.estimator.export.PredictOutput({'words': predictions_dict['words'],
-                                                                           'difference_logprob':
-                                                                               predictions_dict['difference_logprob']
-                                                                           })
+    # Export outputs
+    # export_outputs = {'predictions': tf.estimator.export.PredictOutput({'words': predictions_dict['words'],
+    #                                                                     'difference_logprob':
+    #                                                                         predictions_dict['difference_logprob']
+    #                                                                     })}
+    export_outputs = {'predictions': tf.estimator.export.PredictOutput(predictions_dict)}
 
     return tf.estimator.EstimatorSpec(
         mode=mode,

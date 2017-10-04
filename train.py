@@ -15,7 +15,7 @@ from src.model import crnn_fn
 from src.data_handler import data_loader
 from src.data_handler import preprocess_image_for_prediction
 
-from src.config import Params
+from src.config import Params, Alphabet
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -26,25 +26,24 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output_model_dir', required=True, type=str,
                         help='Directory for output', default='./estimator')
     parser.add_argument('-n', '--nb-epochs', type=int, default=30, help='Number of epochs')
-    parser.add_argument('-g', '--gpu', type=str, help='GPU 0,1 or '' ', default='')
+    parser.add_argument('-g', '--gpu', type=str, help="GPU 0,1 or '' ", default='')
     args = vars(parser.parse_args())
 
-    parameters = Params(n_classes=37,
-                        train_batch_size=128,
-                        eval_batch_size=256,
-                        learning_rate=1e-3,  # 0.001 recommended
+    parameters = Params(train_batch_size=64,
+                        eval_batch_size=64,
+                        learning_rate=1e-5,  # 1e-3 recommended
                         decay_rate=0.9,
                         decay_steps=10000,
-                        eval_interval=1e3,
-                        evaluate_every_epoch=1,
-                        save_interval=1e4,
+                        evaluate_every_epoch=5,
+                        save_interval=5e3,
                         input_shape=(32, 100),
-                        # optimizer=args.get('optimizer')
                         optimizer='adam',
-                        digits_only=True,
+                        # digits_only=False,
+                        alphabet=Alphabet.LETTERS_DIGITS,
+                        alphabet_decoding='lowercase',
+                        csv_delimiter=' ',
                         csv_files_eval=args.get('csv_files_eval'),
                         csv_files_train=args.get('csv_files_train'),
-                        csv_delimiter=' ',
                         output_model_dir=args.get('output_model_dir'),
                         n_epochs=args.get('nb_epochs'),
                         gpu=args.get('gpu')
@@ -58,7 +57,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_VISIBLE_DEVICES'] = parameters.gpu
     config_sess = tf.ConfigProto()
-    config_sess.gpu_options.per_process_gpu_memory_fraction = 0.6
+    config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8
 
     # Config estimator
     est_config = tf.estimator.RunConfig()
@@ -82,24 +81,6 @@ if __name__ == '__main__':
             n_samples += len(list(reader))
 
     try:
-        # # train_steps = conf.evalInterval
-        # # glb_step = 0
-        # while True:
-        #     # Train for approximately 1 epoch and then evaluate
-        #     estimator.train(input_fn=data_loader(csv_filename=parameters.csv_files_train,
-        #                                          params=parameters,
-        #                                          # cursor=(glb_step * conf.trainBatchSize) % n_samples,
-        #                                          batch_size=parameters.train_batch_size,
-        #                                          num_epochs=parameters.n_epochs,
-        #                                          data_augmentation=True),
-        #                     steps=np.floor(n_samples / parameters.train_batch_size))
-        #     # glb_step += train_steps
-        #     estimator.evaluate(input_fn=data_loader(csv_filename=parameters.csv_files_eval,
-        #                                             params=parameters,
-        #                                             batch_size=parameters.eval_batch_size,
-        #                                             num_epochs=1),
-        #                        steps=None)
-
         for e in trange(0, parameters.n_epochs, parameters.evaluate_every_epoch):
             estimator.train(input_fn=data_loader(csv_filename=parameters.csv_files_train,
                                                  params=parameters,
