@@ -2,9 +2,10 @@
 __author__ = 'solivr'
 
 import tensorflow as tf
+from typing import List
 
 
-def get_words_from_chars(characters_list, sequence_lengths, name='chars_conversion'):
+def get_words_from_chars(characters_list: List[str], sequence_lengths: List[int], name='chars_conversion'):
     with tf.name_scope(name=name):
         def join_charcaters_fn(coords):
             return tf.reduce_join(characters_list[coords[0]:coords[1]])
