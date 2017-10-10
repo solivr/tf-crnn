@@ -17,6 +17,7 @@ class Alphabet:
     DecodingList = ['same', 'lowercase']
 
     BLANK_SYMBOL = '$'
+    DIGITS_ONLY = Digits + BLANK_SYMBOL
     LETTERS_DIGITS = Digits + LettersCapitals + LettersLowercase + BLANK_SYMBOL
     LETTERS_DIGITS_LOWERCASE = Digits + LettersLowercase + BLANK_SYMBOL
     LETTERS_ONLY = LettersCapitals + LettersLowercase + BLANK_SYMBOL
@@ -31,8 +32,8 @@ class Params:
         self._train_batch_size = kwargs.get('train_batch_size', 100)
         self._eval_batch_size = kwargs.get('eval_batch_size', 200)
         self._learning_rate = kwargs.get('learning_rate', 1e-4)
-        self._decay_rate = kwargs.get('decay_rate', 0.96)
-        self._decay_steps = kwargs.get('decay_steps', 1000)
+        self._learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
+        self._learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
         self._optimizer = kwargs.get('optimizer', 'adam')
         self._n_epochs = kwargs.get('n_epochs', 50)
         self._evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
@@ -59,7 +60,8 @@ class Params:
             json.dump(vars(self), f)
 
     def _assign_alphabet(self, alphabet_decoding_list):
-        assert self._alphabet in [Alphabet.LETTERS_DIGITS, Alphabet.LETTERS_ONLY, Alphabet.LETTERS_EXTENDED], \
+        assert self._alphabet in [Alphabet.LETTERS_DIGITS, Alphabet.LETTERS_ONLY,
+                                  Alphabet.LETTERS_EXTENDED, Alphabet.DIGITS_ONLY], \
             'Unknown alphabet {}'.format(self._alphabet)
         assert self._alphabet_decoding in alphabet_decoding_list, \
             'Unknown alphabet decoding {}'.format(self._alphabet_decoding)
@@ -94,6 +96,10 @@ class Params:
                                                 list(range(len(Alphabet.LettersCapitals),
                                                            len(Alphabet.LettersCapitals) + len(Alphabet.Symbols) + 1))
                 self._blank_label_code = self._alphabet_codes[-1]
+        elif self._alphabet == Alphabet.DIGITS_ONLY:
+            self._alphabet_decoding = self._alphabet
+            self._alphabet_codes = list(range(len(Alphabet.Digits) + 1))
+            self._alphabet_decoding_codes = self._alphabet_codes
 
         if self._alphabet_decoding == 'same':
             self._alphabet_decoding = self._alphabet
@@ -123,11 +129,11 @@ class Params:
 
     @property
     def decay_rate(self):
-        return self._decay_rate
+        return self._learning_decay_rate
 
     @property
     def decay_steps(self):
-        return self._decay_steps
+        return self._learning_decay_steps
 
     @property
     def optimizer(self):
