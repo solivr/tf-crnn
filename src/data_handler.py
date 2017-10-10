@@ -4,10 +4,11 @@ __author__ = 'solivr'
 import tensorflow as tf
 import numpy as np
 from .config import Params, CONST
+from typing import Tuple
 
 
-def data_loader(csv_filename, params: Params, batch_size=128, data_augmentation=False,
-                num_epochs=None, image_summaries=False):
+def data_loader(csv_filename: str, params: Params, batch_size: int=128, data_augmentation: bool=False,
+                num_epochs: int=None, image_summaries: bool=False):
 
     def input_fn():
         # Choose case one csv file or list of csv files
@@ -45,12 +46,13 @@ def data_loader(csv_filename, params: Params, batch_size=128, data_augmentation=
     return input_fn
 
 
-def image_reading(path, resized_size=None, data_augmentation=False, padding=False):
+def image_reading(path: str, resized_size: Tuple[int, int]=None, data_augmentation: bool=False,
+                  padding: bool=False) -> Tuple[tf.Tensor, tf.Tensor]:
     # Read image
     image_content = tf.read_file(path, name='image_reader')
     image = tf.cond(tf.equal(tf.string_split([path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
-                    true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True),
-                    false_fn=lambda: tf.image.decode_png(image_content, channels=1))
+                    true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True), # TODO channels = 3 ?
+                    false_fn=lambda: tf.image.decode_png(image_content, channels=1), name='image_decoding')
 
     # Data augmentation
     if data_augmentation:
@@ -61,17 +63,15 @@ def image_reading(path, resized_size=None, data_augmentation=False, padding=Fals
         with tf.name_scope('padding'):
             image, img_width = padding_inputs_width(image, resized_size, increment=CONST.DIMENSION_REDUCTION_W_POOLING)
     # Resize
-    elif resized_size:
+    else:
         image = tf.image.resize_images(image, size=resized_size)
         img_width = tf.shape(image)[1]
-    else:
-        raise NotImplementedError
 
     with tf.control_dependencies([tf.assert_equal(image.shape[:2], resized_size)]):
         return image, img_width
 
 
-def random_rotation(img, max_rotation=0.1, crop=True):  # from SeguinBe
+def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # from SeguinBe
     with tf.name_scope('RandomRotation'):
         rotation = tf.random_uniform([], -max_rotation, max_rotation)
         rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
@@ -97,7 +97,7 @@ def random_rotation(img, max_rotation=0.1, crop=True):  # from SeguinBe
         return rotated_image
 
 
-def random_padding(image, max_pad_w=5, max_pad_h=10):
+def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.Tensor:
     w_pad = list(np.random.randint(0, max_pad_w, size=[2]))
     h_pad = list(np.random.randint(0, max_pad_h, size=[2]))
     paddings = [h_pad, w_pad, [0, 0]]
@@ -105,7 +105,7 @@ def random_padding(image, max_pad_w=5, max_pad_h=10):
     return tf.pad(image, paddings, mode='REFLECT', name='random_padding')
 
 
-def augment_data(image):
+def augment_data(image: tf.Tensor) -> tf.Tensor:
     with tf.name_scope('DataAugmentation'):
 
         # Random padding
@@ -113,7 +113,7 @@ def augment_data(image):
 
         image = tf.image.random_brightness(image, max_delta=0.1)
         image = tf.image.random_contrast(image, 0.5, 1.5)
-        image = random_rotation(image, 0.1, crop=True)
+        image = random_rotation(image, 0.05, crop=True)
 
         if image.shape[-1] >= 3:
             image = tf.image.random_hue(image, 0.2)
@@ -122,7 +122,7 @@ def augment_data(image):
         return image
 
 
-def padding_inputs_width(image, target_shape, increment):
+def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increment: int) -> Tuple[tf.Tensor, tf.Tensor]:
 
     target_ratio = target_shape[1]/target_shape[0]
     # Compute ratio to keep the same ratio in new image and get the size of padding
@@ -198,7 +198,7 @@ def padding_inputs_width(image, target_shape, increment):
     return pad_image, new_w  # new_w = image width used for computing sequence lengths
 
 
-def preprocess_image_for_prediction(fixed_height=32, min_width=8):
+def preprocess_image_for_prediction(fixed_height: int=32, min_width: int=8):
     """
     Input function to use when exporting the model for making predictions (see estimator.export_savedmodel)
     :param fixed_height: height of the input image after resizing
