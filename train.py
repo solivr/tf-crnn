@@ -27,21 +27,23 @@ if __name__ == '__main__':
                         help='Directory for output', default='./estimator')
     parser.add_argument('-n', '--nb-epochs', type=int, default=30, help='Number of epochs')
     parser.add_argument('-g', '--gpu', type=str, help="GPU 0,1 or '' ", default='')
+    # TODO
+    parser.add_argument('-p', '--params-file', type=str, help='Parameters filename (not implemented yet)', default=None)
     args = vars(parser.parse_args())
 
-    parameters = Params(train_batch_size=64,
-                        eval_batch_size=64,
+    parameters = Params(train_batch_size=128,
+                        eval_batch_size=128,
                         learning_rate=1e-5,  # 1e-3 recommended
-                        decay_rate=0.9,
-                        decay_steps=10000,
+                        learning_decay_rate=0.9,
+                        learning_decay_steps=10000,
                         evaluate_every_epoch=5,
                         save_interval=5e3,
-                        input_shape=(32, 100),
+                        input_shape=(32, 324),
                         optimizer='adam',
-                        # digits_only=False,
-                        alphabet=Alphabet.LETTERS_DIGITS,
-                        alphabet_decoding='lowercase',
-                        csv_delimiter=' ',
+                        digits_only=False,
+                        alphabet=Alphabet.LETTERS_EXTENDED,
+                        alphabet_decoding='same',
+                        csv_delimiter=';',
                         csv_files_eval=args.get('csv_files_eval'),
                         csv_files_train=args.get('csv_files_train'),
                         output_model_dir=args.get('output_model_dir'),
@@ -65,7 +67,8 @@ if __name__ == '__main__':
                        save_checkpoints_steps=parameters.save_interval,
                        session_config=config_sess,
                        save_checkpoints_secs=None,
-                       save_summary_steps=1000)
+                       save_summary_steps=1000,
+                       model_dir=parameters.output_model_dir)
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,
@@ -75,7 +78,7 @@ if __name__ == '__main__':
 
     # Count number of image filenames in csv
     n_samples = 0
-    for file in parameters.csv_files_train:
+    for file in parameters.csv_files_eval:
         with open(file, 'r', encoding='utf8') as csvfile:
             reader = csv.reader(csvfile, delimiter=parameters.csv_delimiter)
             n_samples += len(list(reader))
@@ -91,7 +94,9 @@ if __name__ == '__main__':
             estimator.evaluate(input_fn=data_loader(csv_filename=parameters.csv_files_eval,
                                                     params=parameters,
                                                     batch_size=parameters.eval_batch_size,
-                                                    num_epochs=1))
+                                                    num_epochs=1),
+                               steps=np.floor(n_samples/parameters.eval_batch_size)
+                               )
 
     except KeyboardInterrupt:
         print('Interrupted')

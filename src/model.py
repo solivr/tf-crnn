@@ -3,7 +3,7 @@ __author__ = 'solivr'
 
 
 import tensorflow as tf
-# import warpctc_tensorflow
+import warpctc_tensorflow
 from tensorflow.contrib.rnn import BasicLSTMCell
 from .decoding import get_words_from_chars
 from .config import Params, CONST
@@ -23,12 +23,14 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
     return tf.nn.conv2d(input, filter, strides=strides, padding=padding, name=name)
 
 
-def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
+def deep_cnn(input_imgs: tf.Tensor, is_training: bool, summaries: bool=True) -> tf.Tensor:
     input_tensor = input_imgs
     if input_tensor.shape[-1] == 1:
         input_channels = 1
-    if input_tensor.shape[-1] == 3:
+    elif input_tensor.shape[-1] == 3:
         input_channels = 3
+    else:
+        raise NotImplementedError
 
     # Following source code, not paper
 
@@ -43,11 +45,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
             pool1 = tf.nn.max_pool(conv1, [1, 2, 2, 1], strides=[1, 2, 2, 1],
                                    padding='SAME', name='pool')
 
-            # tf.summary.image('1st_sample', pool1[:, :, :, :1], 1)
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer1/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         # - conv2 - maxPool 2x2
         with tf.variable_scope('layer2'):
@@ -59,11 +61,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
             pool2 = tf.nn.max_pool(conv2, [1, 2, 2, 1], strides=[1, 2, 2, 1],
                                    padding='SAME', name='pool1')
 
-            # tf.summary.image('1st_sample', pool2[:, :, :, :1], 1)
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer2/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         # - conv3 - w/batch-norm (as source code, not paper)
         with tf.variable_scope('layer3'):
@@ -75,10 +77,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
                                                    training=is_training, name='batch-norm')
             conv3 = tf.nn.relu(b_norm, name='ReLU')
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer3/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         # - conv4 - maxPool 2x1
         with tf.variable_scope('layer4'):
@@ -90,11 +93,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
             pool4 = tf.nn.max_pool(conv4, [1, 2, 2, 1], strides=[1, 2, 1, 1],
                                    padding='SAME', name='pool4')
 
-            # tf.summary.image('1st_sample', pool4[:, :, :, :1], 1)
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer4/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         # - conv5 - w/batch-norm
         with tf.variable_scope('layer5'):
@@ -106,10 +109,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
                                                    training=is_training, name='batch-norm')
             conv5 = tf.nn.relu(b_norm)
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer5/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         # - conv6 - maxPool 2x1 (as source code, not paper)
         with tf.variable_scope('layer6'):
@@ -121,10 +125,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
             pool6 = tf.nn.max_pool(conv6, [1, 2, 2, 1], strides=[1, 2, 1, 1],
                                    padding='SAME', name='pool6')
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer6/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         # - conv 7 - w/batch-norm (as source code, not paper)
         with tf.variable_scope('layer7'):
@@ -136,10 +141,11 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
                                                    training=is_training, name='batch-norm')
             conv7 = tf.nn.relu(b_norm)
 
-            weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables() if var.name == 'deep_cnn/layer7/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         cnn_net = conv7
 
@@ -153,7 +159,7 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool) -> tf.Tensor:
     return conv_reshaped
 
 
-def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params) -> tf.Tensor:
+def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=True) -> tf.Tensor:
     # Prepare data shape to match `bidirectional_rnn` function requirements
     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
 
@@ -183,13 +189,13 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params) -> tf.Tensor:
             b = biasVar([params.n_classes])
             fc_out = tf.nn.bias_add(tf.matmul(rnn_reshaped, W), b)
 
-            # Summaries
-            weights = [var for var in tf.global_variables()
-                       if var.name == 'deep_bidirectional_lstm/fully_connected/weights:0'][0]
-            tf.summary.histogram('weights', weights)
-            bias = [var for var in tf.global_variables()
-                    if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
-            tf.summary.histogram('bias', bias)
+            if summaries:
+                weights = [var for var in tf.global_variables()
+                           if var.name == 'deep_bidirectional_lstm/fully_connected/weights:0'][0]
+                tf.summary.histogram('weights', weights)
+                bias = [var for var in tf.global_variables()
+                        if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
+                tf.summary.histogram('bias', bias)
 
         lstm_out = tf.reshape(fc_out, [shape[0], -1, params.n_classes], name='reshape_out')  # [batch, width, n_classes]
 
@@ -224,8 +230,8 @@ def crnn_fn(features, labels, mode, params):
     else:
         parameters.keep_prob_dropout = 1.0
 
-    conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN))
-    logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters)  # params: rnn_seq_length, keep_prob
+    conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN), summaries=False)
+    logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters)
 
     # Compute seq_len from image width
     n_pools = CONST.DIMENSION_REDUCTION_W_POOLING  # 2x2 pooling in dimension W on layer 1 and 2
@@ -254,8 +260,8 @@ def crnn_fn(features, labels, mode, params):
         seq_lengths_labels = tf.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
                                          minlength=tf.shape(predictions_dict['prob'])[1])
 
-        # Loss
-        # ----
+        # # Loss
+        # # ----
         # loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
         #                                   flat_labels=sparse_code_target.values,
         #                                   label_lengths=tf.cast(seq_lengths_labels, tf.int32),
@@ -263,21 +269,23 @@ def crnn_fn(features, labels, mode, params):
         #                                   blank_label=parameters.blank_label_code)
         # loss_ctc = tf.reduce_mean(loss_ctc)
 
-        # # >>> Getting instable results with this function, using Baidu's version for now
-        loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
-                                  inputs=predictions_dict['prob'],
-                                  sequence_length=tf.cast(seq_len_inputs, tf.int32),
-                                  preprocess_collapse_repeated=False,
-                                  ctc_merge_repeated=True,
-                                  ignore_longer_outputs_than_inputs=True,
-                                  time_major=True)
-        loss_ctc = tf.reduce_mean(loss_ctc)
+        # >>> Getting instable results with this function, using Baidu's version for now
+        # >>> And cannot have longer labels than predictions -> error
+        with tf.control_dependencies([tf.less_equal(sparse_code_target.dense_shape[1], tf.reduce_max(tf.cast(seq_len_inputs, tf.int64)))]):
+            loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
+                                      inputs=predictions_dict['prob'],
+                                      sequence_length=tf.cast(seq_len_inputs, tf.int32),
+                                      preprocess_collapse_repeated=False,
+                                      ctc_merge_repeated=True,
+                                      ignore_longer_outputs_than_inputs=True,  # returns zero gradient in case it happens -> ema loss = NaN
+                                      time_major=True)
+            loss_ctc = tf.reduce_mean(loss_ctc)
 
-        # Create an ExponentialMovingAverage object
-        ema = tf.train.ExponentialMovingAverage(decay=0.99)
-        # Create the shadow variables, and add op to maintain moving averages
-        maintain_averages_op = ema.apply([loss_ctc])
-        loss_ema = ema.average(loss_ctc)
+        # # Create an ExponentialMovingAverage object
+        # ema = tf.train.ExponentialMovingAverage(decay=0.99)
+        # # Create the shadow variables, and add op to maintain moving averages
+        # maintain_averages_op = ema.apply([loss_ctc])
+        # loss_ema = ema.average(loss_ctc)
 
         # Train op
         # --------
@@ -293,13 +301,13 @@ def crnn_fn(features, labels, mode, params):
             optimizer = tf.train.RMSPropOptimizer(learning_rate)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(update_ops + [maintain_averages_op]):
+        # remove [maintain_average_op] from dependencies -> better to use it when restoring a model
+        with tf.control_dependencies(update_ops):
             train_op = optimizer.minimize(loss_ctc, global_step=global_step)
 
         # Summaries
         # ---------
         tf.summary.scalar('learning_rate', learning_rate)
-        tf.summary.scalar('losses/ema_loss', loss_ema)
         tf.summary.scalar('losses/ctc_loss', loss_ctc)
     else:
         loss_ctc, train_op = None, None
@@ -315,34 +323,25 @@ def crnn_fn(features, labels, mode, params):
                                                                               merge_repeated=False,
                                                                               beam_width=100,
                                                                               top_paths=2)
-            sparse_code_pred = sparse_code_pred[0]
             # Score
-            predictions_dict['difference_logprob'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
+            predictions_dict['score'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
             # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
+            sparse_code_pred = sparse_code_pred[0]
 
             sequence_lengths_pred = tf.bincount(tf.cast(sparse_code_pred.indices[:, 0], tf.int32),
                                                 minlength=tf.shape(predictions_dict['prob'])[1])
 
             pred_chars = table_int2str.lookup(sparse_code_pred)
             predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths_pred)
-            # >>>>>>>>>
-            # tf.summary.text('sparse_code_indices', tf.as_string(sparse_code_pred.indices[:, 0]))
-            # tf.summary.text('predicted_chars',
-            #                 tf.sparse_to_dense(pred_chars.indices, pred_chars.dense_shape,
-            #                                    pred_chars.values, default_value='+'))
-            # tf.summary.text('sequence_lengths', tf.as_string(sequence_lengths_pred))
-            # tf.summary.text('pred_chars_values', pred_chars.values)
-            # >>>>>>>>>>>
+
             tf.summary.text('predicted_words', predictions_dict['words'][:10])
 
     # Evaluation ops
     # --------------
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('evaluation'):
-            with tf.control_dependencies([tf.assert_equal(tf.shape(predictions_dict['words']),
-                                                          tf.shape(labels))]):
-                CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
-                accuracy = tf.metrics.accuracy(labels, predictions_dict['words'], name='accuracy')
+            CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
+            accuracy = tf.metrics.accuracy(labels, predictions_dict['words'], name='accuracy')
 
             eval_metric_ops = {
                                'eval/accuracy': accuracy,
@@ -365,5 +364,6 @@ def crnn_fn(features, labels, mode, params):
         train_op=train_op,
         eval_metric_ops=eval_metric_ops,
         export_outputs=export_outputs,
+        scaffold=tf.train.Scaffold()
         # scaffold=tf.train.Scaffold(init_fn=None)  # Specify init_fn to restore from previous model
     )
