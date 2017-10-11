@@ -32,7 +32,7 @@ def data_loader(csv_filename: str, params: Params, batch_size: int=128, data_aug
         prepared_batch = tf.train.shuffle_batch(to_batch,
                                                 batch_size=batch_size,
                                                 min_after_dequeue=500,
-                                                num_threads=15, capacity=3000,
+                                                num_threads=15, capacity=4000,
                                                 allow_smaller_final_batch=False,
                                                 name='prepared_batch_queue')
 
@@ -214,11 +214,10 @@ def preprocess_image_for_prediction(fixed_height: int=32, min_width: int=8):
         # Assert shape is h x w x c with c = 1
 
         ratio = tf.divide(shape[1], shape[0])
-        increment = 2
+        increment = CONST.DIMENSION_REDUCTION_W_POOLING
         new_width = tf.cast(tf.round((ratio * fixed_height) / increment) * increment, tf.int32)
 
-        min_width_t = tf.constant(min_width, dtype=tf.int32)
-        resized_image = tf.cond(new_width < min_width_t,
+        resized_image = tf.cond(new_width < tf.constant(min_width, dtype=tf.int32),
                                 true_fn=lambda: tf.image.resize_images(image, size=(fixed_height, min_width)),
                                 false_fn=lambda: tf.image.resize_images(image, size=(fixed_height, new_width))
                                 )

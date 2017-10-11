@@ -3,6 +3,7 @@ __author__ = 'solivr'
 
 import os
 import json
+import time
 
 
 class CONST:
@@ -13,6 +14,7 @@ class Alphabet:
     LettersLowercase = 'abcdefghijklmnopqrstuvwxyz'  # 26
     LettersCapitals = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # 26
     Digits = '0123456789'  # 10
+    # Symbols = " '.,:;-_=()[]{}"  # 15
     Symbols = " '.,:-="  # 7
     DecodingList = ['same', 'lowercase']
 
@@ -24,168 +26,119 @@ class Alphabet:
     LETTERS_ONLY_LOWERCASE = LettersLowercase + BLANK_SYMBOL
     LETTERS_EXTENDED = LettersCapitals + LettersLowercase + Symbols + BLANK_SYMBOL
     LETTERS_EXTENDED_LOWERCASE = LettersLowercase + Symbols + BLANK_SYMBOL
-    # TODO : Maybe add a unique code (unicode?) to each character
+    LETTERS_DIGITS_EXTENDED = Digits + LettersCapitals + LettersLowercase + Symbols + BLANK_SYMBOL
+    LETTERS_DIGITS_EXTENDED_LOWERCASE = Digits + LettersLowercase + Symbols + BLANK_SYMBOL
+    # TODO : Maybe add a unique code (unicode?) to each character and add mask
+
+    LabelMapping = {
+        'digits_only': DIGITS_ONLY,
+        'letters_only': LETTERS_ONLY,
+        'letters_digits': LETTERS_DIGITS,
+        'letters_extended': LETTERS_EXTENDED,
+        'letters_digits_extended': LETTERS_DIGITS_EXTENDED
+    }
+
+    # This are codes for the case DecodingList = 'lowercase'
+    CODES_DIGITS_ONLY = list(range(len(Digits) + 1))
+    CODES_LETTERS_DIGITS = list(range(len(Digits))) + \
+                           list(range(len(Digits), len(Digits) + len(LettersCapitals))) + \
+                           list(range(len(Digits), len(Digits) + len(LettersLowercase) + 1))
+    CODES_LETTERS_DIGITS_LOWERCASE = list(range(len(Digits))) + \
+                                     list(range(len(Digits), len(Digits) + len(LettersLowercase) + 1))
+    CODES_LETTERS_ONLY = list(range(len(LettersCapitals))) + \
+                         list(range(len(LettersLowercase) + 1))
+    CODES_LETTERS_ONLY_LOWERCASE = list(range(len(LettersLowercase) + 1))
+    CODES_LETTERS_EXTENDED = list(range(len(LettersCapitals))) + \
+                             list(range(len(LettersLowercase))) + \
+                             list(range(len(LettersCapitals), len(LettersCapitals) + len(Symbols) + 1))
+    CODES_LETTERS_EXTENDED_LOWERCASE = list(range(len(LettersLowercase))) + \
+                                       list(range(len(LettersLowercase), len(LettersLowercase) + len(Symbols) + 1))
+    CODES_LETTERS_DIGITS_EXTENDED = list(range(len(Digits))) + \
+                                    list(range(len(Digits), len(Digits) + len(LettersCapitals))) + \
+                                    list(range(len(Digits), len(Digits) + len(LettersLowercase))) + \
+                                    list(range(len(Digits) + len(LettersCapitals),
+                                               len(Digits) + len(LettersCapitals) +
+                                               len(Symbols) + 1))
+    CODES_LETTERS_DIGITS_EXTENDED_LOWERCASE = list(range(len(Digits))) + \
+                                              list(range(len(Digits), len(Digits) + len(LettersLowercase))) + \
+                                              list(range(len(Digits) + len(LettersLowercase),
+                                                         len(Digits) + len(LettersLowercase) +
+                                                         len(Symbols) + 1))
 
 
 class Params:
     def __init__(self, **kwargs):
-        self._train_batch_size = kwargs.get('train_batch_size', 100)
-        self._eval_batch_size = kwargs.get('eval_batch_size', 200)
-        self._learning_rate = kwargs.get('learning_rate', 1e-4)
-        self._learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
-        self._learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
-        self._optimizer = kwargs.get('optimizer', 'adam')
-        self._n_epochs = kwargs.get('n_epochs', 50)
-        self._evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
-        self._save_interval = kwargs.get('save_interval', 1e3)
-        self._input_shape = kwargs.get('input_shape', (32, 100))
-        self._digits_only = kwargs.get('digits_only', False)
-        self._alphabet_decoding = kwargs.get('alphabet_decoding', 'same')
-        self._csv_delimiter = kwargs.get('csv_delimiter', ';')
-        self._gpu = kwargs.get('gpu', '')
-        self._alphabet = kwargs.get('alphabet')
-        self._csv_files_train = kwargs.get('csv_files_train')
-        self._csv_files_eval = kwargs.get('csv_files_eval')
-        self._output_model_dir = kwargs.get('output_model_dir')
+        self.train_batch_size = kwargs.get('train_batch_size', 100)
+        self.eval_batch_size = kwargs.get('eval_batch_size', 200)
+        self.learning_rate = kwargs.get('learning_rate', 1e-4)
+        self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
+        self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
+        self.optimizer = kwargs.get('optimizer', 'adam')
+        self.n_epochs = kwargs.get('n_epochs', 50)
+        self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
+        self.save_interval = kwargs.get('save_interval', 1e3)
+        self.input_shape = kwargs.get('input_shape', (32, 100))
+        self.alphabet_decoding = kwargs.get('alphabet_decoding', 'same')
+        self.csv_delimiter = kwargs.get('csv_delimiter', ';')
+        self.gpu = kwargs.get('gpu', '')
+        self.alphabet = kwargs.get('alphabet')
+        self.csv_files_train = kwargs.get('csv_files_train')
+        self.csv_files_eval = kwargs.get('csv_files_eval')
+        self.output_model_dir = kwargs.get('output_model_dir')
         self._keep_prob_dropout = kwargs.get('keep_prob')
 
-        assert self._optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self._optimizer)
+        assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
 
         self._assign_alphabet(alphabet_decoding_list=Alphabet.DecodingList)
 
     def export_experiment_params(self):
         if not os.path.isdir(self.output_model_dir):
             os.mkdir(self.output_model_dir)
-        with open(os.path.join(self.output_model_dir, 'model_params.json'), 'w') as f:
+        filename = os.path.join(self.output_model_dir, 'model_params_{}.json'.format(round(time.time())))
+        with open(filename, 'w') as f:
             json.dump(vars(self), f)
 
     def _assign_alphabet(self, alphabet_decoding_list):
-        assert self._alphabet in [Alphabet.LETTERS_DIGITS, Alphabet.LETTERS_ONLY,
-                                  Alphabet.LETTERS_EXTENDED, Alphabet.DIGITS_ONLY], \
-            'Unknown alphabet {}'.format(self._alphabet)
-        assert self._alphabet_decoding in alphabet_decoding_list, \
-            'Unknown alphabet decoding {}'.format(self._alphabet_decoding)
+        assert (self.alphabet in Alphabet.LabelMapping.keys() or self.alphabet in Alphabet.LabelMapping.values()), \
+            'Unknown alphabet {}'.format(self.alphabet)
+        assert self.alphabet_decoding in alphabet_decoding_list, \
+            'Unknown alphabet decoding {}'.format(self.alphabet_decoding)
 
-        if self._alphabet == Alphabet.LETTERS_DIGITS:
-            if self._alphabet_decoding == 'lowercase':
-                self._alphabet_decoding = Alphabet.LETTERS_DIGITS_LOWERCASE
-                self._alphabet_codes = list(range(len(Alphabet.Digits))) + \
-                                       list(range(len(Alphabet.Digits),
-                                                  len(Alphabet.Digits) + len(Alphabet.LettersCapitals))) + \
-                                       list(range(len(Alphabet.Digits),
-                                                  len(Alphabet.Digits) + len(Alphabet.LettersLowercase) + 1))
-                self._alphabet_decoding_codes = list(range(len(Alphabet.Digits))) + \
-                                                list(range(len(Alphabet.Digits),
-                                                           len(Alphabet.Digits) + len(Alphabet.LettersLowercase) + 1))
-                self._blank_label_code = self._alphabet_codes[-1]
-        elif self._alphabet == Alphabet.LETTERS_ONLY:
-            if self._alphabet_decoding == 'lowercase':
-                self._alphabet_decoding = Alphabet.LETTERS_ONLY_LOWERCASE
-                self._alphabet_codes = list(range(len(Alphabet.LettersCapitals))) + \
-                                       list(range(len(Alphabet.LettersLowercase) + 1))
-                self._alphabet_decoding_codes = list(range(len(Alphabet.LettersLowercase) + 1))
-                self._blank_label_code = self._alphabet_codes[-1]
-        elif self._alphabet == Alphabet.LETTERS_EXTENDED:
-            if self._alphabet_decoding == 'lowercase':
-                self._alphabet_decoding = Alphabet.LETTERS_EXTENDED_LOWERCASE
-                self._alphabet_codes = list(range(len(Alphabet.LettersCapitals))) + \
-                                       list(range(len(Alphabet.LettersLowercase))) + \
-                                       list(range(len(Alphabet.LettersCapitals),
-                                                  len(Alphabet.LettersCapitals) + len(Alphabet.Symbols) + 1))
-                self._alphabet_decoding_codes = list(range(len(Alphabet.LettersLowercase))) + \
-                                                list(range(len(Alphabet.LettersCapitals),
-                                                           len(Alphabet.LettersCapitals) + len(Alphabet.Symbols) + 1))
-                self._blank_label_code = self._alphabet_codes[-1]
-        elif self._alphabet == Alphabet.DIGITS_ONLY:
-            self._alphabet_decoding = self._alphabet
-            self._alphabet_codes = list(range(len(Alphabet.Digits) + 1))
-            self._alphabet_decoding_codes = self._alphabet_codes
+        if self.alphabet in Alphabet.LabelMapping.keys():
+            self.alphabet = Alphabet.LabelMapping[self.alphabet]
 
-        if self._alphabet_decoding == 'same':
-            self._alphabet_decoding = self._alphabet
-            self._alphabet_codes = list(range(len(self._alphabet)))
-            self._blank_label_code = self._alphabet_codes[-1]
+        if self.alphabet_decoding == 'lowercase':
+            if self.alphabet == Alphabet.LETTERS_DIGITS:
+                self.alphabet_decoding = Alphabet.LETTERS_DIGITS_LOWERCASE
+                self._alphabet_codes = Alphabet.CODES_LETTERS_DIGITS
+                self._alphabet_decoding_codes = Alphabet.CODES_LETTERS_DIGITS_LOWERCASE
+                self.blank_label_code = self._alphabet_codes[-1]
+
+            elif self.alphabet == Alphabet.LETTERS_ONLY:
+                self.alphabet_decoding = Alphabet.LETTERS_ONLY_LOWERCASE
+                self._alphabet_codes = Alphabet.CODES_LETTERS_ONLY
+                self._alphabet_decoding_codes = Alphabet.CODES_LETTERS_ONLY_LOWERCASE
+                self.blank_label_code = self._alphabet_codes[-1]
+
+            elif self.alphabet == Alphabet.LETTERS_EXTENDED:
+                self.alphabet_decoding = Alphabet.LETTERS_EXTENDED_LOWERCASE
+                self._alphabet_codes = Alphabet.CODES_LETTERS_EXTENDED
+                self._alphabet_decoding_codes = Alphabet.CODES_LETTERS_EXTENDED_LOWERCASE
+                self.blank_label_code = self._alphabet_codes[-1]
+
+            elif self.alphabet == Alphabet.LETTERS_DIGITS_EXTENDED:
+                self.alphabet_decoding = Alphabet.LETTERS_DIGITS_EXTENDED_LOWERCASE
+                self._alphabet_codes = Alphabet.CODES_LETTERS_DIGITS_EXTENDED
+                self._alphabet_decoding_codes = Alphabet.CODES_LETTERS_DIGITS_EXTENDED_LOWERCASE
+
+        elif self.alphabet_decoding == 'same':
+            self.alphabet_decoding = self.alphabet
+            self._alphabet_codes = list(range(len(self.alphabet)))
+            self.blank_label_code = self._alphabet_codes[-1]
             self._alphabet_decoding_codes = self._alphabet_codes
 
         self._nclasses = self._alphabet_codes[-1] + 1
         self._blank_label_symbol = Alphabet.BLANK_SYMBOL
-
-
-    @property
-    def n_classes(self):
-        return self._nclasses
-
-    @property
-    def train_batch_size(self):
-        return self._train_batch_size
-
-    @property
-    def eval_batch_size(self):
-        return self._eval_batch_size
-
-    @property
-    def learning_rate(self):
-        return self._learning_rate
-
-    @property
-    def decay_rate(self):
-        return self._learning_decay_rate
-
-    @property
-    def decay_steps(self):
-        return self._learning_decay_steps
-
-    @property
-    def optimizer(self):
-        return self._optimizer
-
-    @property
-    def n_epochs(self):
-        return self._n_epochs
-
-    @property
-    def save_interval(self):
-        return self._save_interval
-
-    @property
-    def input_shape(self):
-        return self._input_shape
-
-    @property
-    def csv_files_train(self):
-        return self._csv_files_train
-
-    @property
-    def csv_files_eval(self):
-        return self._csv_files_eval
-
-    @property
-    def output_model_dir(self):
-        return self._output_model_dir
-
-    @property
-    def gpu(self):
-        return self._gpu
-
-    @property
-    def alphabet(self):
-        return self._alphabet
-
-    @property
-    def alphabet_decoding(self):
-        return self._alphabet_decoding
-
-    @property
-    def alphabet_decoding_codes(self):
-        return self._alphabet_decoding_codes
-
-    @property
-    def alphabet_codes(self):
-        return self._alphabet_codes
-
-    @property
-    def digits_only(self):
-        return self._digits_only
 
     @property
     def keep_prob_dropout(self):
@@ -193,20 +146,21 @@ class Params:
 
     @keep_prob_dropout.setter
     def keep_prob_dropout(self, value):
+        assert (0.0 < value <= 1.0), 'Must be 0.0 < value <= 1.0'
         self._keep_prob_dropout = value
 
     @property
-    def csv_delimiter(self):
-        return self._csv_delimiter
-
-    @property
-    def evaluate_every_epoch(self):
-        return self._evaluate_every_epoch
-
-    @property
-    def blank_label_code(self):
-        return self._blank_label_code
+    def n_classes(self):
+        return self._nclasses
 
     @property
     def blank_label_symbol(self):
         return self._blank_label_symbol
+
+    @property
+    def alphabet_codes(self):
+        return self._alphabet_codes
+
+    @property
+    def alphabet_decoding_codes(self):
+        return self._alphabet_decoding_codes

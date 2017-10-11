@@ -281,8 +281,9 @@ def crnn_fn(features, labels, mode, params):
 
         # Train op
         # --------
-        learning_rate = tf.train.exponential_decay(parameters.learning_rate, global_step, parameters.decay_steps,
-                                                   parameters.decay_rate, staircase=True)
+        learning_rate = tf.train.exponential_decay(parameters.learning_rate, global_step,
+                                                   parameters.learning_decay_steps, parameters.learning_decay_rate,
+                                                   staircase=True)
 
         if parameters.optimizer == 'ada':
             optimizer = tf.train.AdadeltaOptimizer(learning_rate)

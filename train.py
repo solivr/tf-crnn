@@ -31,14 +31,17 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--params-file', type=str, help='Parameters filename (not implemented yet)', default=None)
     args = vars(parser.parse_args())
 
+    if args.get('params_file'):
+        raise NotImplementedError
+
     parameters = Params(train_batch_size=128,
                         eval_batch_size=128,
-                        learning_rate=1e-5,  # 1e-3 recommended
-                        learning_decay_rate=0.9,
-                        learning_decay_steps=10000,
+                        learning_rate=1e-3,  # 1e-3 recommended
+                        learning_decay_rate=0.95,
+                        learning_decay_steps=5000,
                         evaluate_every_epoch=5,
                         save_interval=5e3,
-                        input_shape=(32, 324),
+                        input_shape=(32, 304),
                         optimizer='adam',
                         digits_only=False,
                         alphabet=Alphabet.LETTERS_EXTENDED,
@@ -60,6 +63,7 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = parameters.gpu
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8
+    config_sess.gpu_options.allow_growth = True
 
     # Config estimator
     est_config = tf.estimator.RunConfig()
