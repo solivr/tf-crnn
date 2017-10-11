@@ -3,7 +3,6 @@ __author__ = 'solivr'
 
 
 import tensorflow as tf
-import warpctc_tensorflow
 from tensorflow.contrib.rnn import BasicLSTMCell
 from .decoding import get_words_from_chars
 from .config import Params, CONST
@@ -231,7 +230,7 @@ def crnn_fn(features, labels, mode, params):
         parameters.keep_prob_dropout = 1.0
 
     conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN), summaries=False)
-    logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters)
+    logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters, summaries=False)
 
     # Compute seq_len from image width
     n_pools = CONST.DIMENSION_REDUCTION_W_POOLING  # 2x2 pooling in dimension W on layer 1 and 2
@@ -260,17 +259,9 @@ def crnn_fn(features, labels, mode, params):
         seq_lengths_labels = tf.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
                                          minlength=tf.shape(predictions_dict['prob'])[1])
 
-        # # Loss
-        # # ----
-        # loss_ctc = warpctc_tensorflow.ctc(activations=predictions_dict['prob'],
-        #                                   flat_labels=sparse_code_target.values,
-        #                                   label_lengths=tf.cast(seq_lengths_labels, tf.int32),
-        #                                   input_lengths=tf.cast(seq_len_inputs, dtype=tf.int32),
-        #                                   blank_label=parameters.blank_label_code)
-        # loss_ctc = tf.reduce_mean(loss_ctc)
-
-        # >>> Getting instable results with this function, using Baidu's version for now
-        # >>> And cannot have longer labels than predictions -> error
+        # Loss
+        # ----
+        # >>> Cannot have longer labels than predictions -> error
         with tf.control_dependencies([tf.less_equal(sparse_code_target.dense_shape[1], tf.reduce_max(tf.cast(seq_len_inputs, tf.int64)))]):
             loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
                                       inputs=predictions_dict['prob'],
@@ -281,15 +272,15 @@ def crnn_fn(features, labels, mode, params):
                                       time_major=True)
             loss_ctc = tf.reduce_mean(loss_ctc)
 
+        global_step = tf.train.get_or_create_global_step()
         # # Create an ExponentialMovingAverage object
-        # ema = tf.train.ExponentialMovingAverage(decay=0.99)
-        # # Create the shadow variables, and add op to maintain moving averages
-        # maintain_averages_op = ema.apply([loss_ctc])
-        # loss_ema = ema.average(loss_ctc)
+        ema = tf.train.ExponentialMovingAverage(decay=0.99, num_updates=global_step, zero_debias=True)
+        # Create the shadow variables, and add op to maintain moving averages
+        maintain_averages_op = ema.apply([loss_ctc])
+        loss_ema = ema.average(loss_ctc)
 
         # Train op
         # --------
-        global_step = tf.train.get_or_create_global_step()
         learning_rate = tf.train.exponential_decay(parameters.learning_rate, global_step, parameters.decay_steps,
                                                    parameters.decay_rate, staircase=True)
 
@@ -301,9 +292,9 @@ def crnn_fn(features, labels, mode, params):
             optimizer = tf.train.RMSPropOptimizer(learning_rate)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        # remove [maintain_average_op] from dependencies -> better to use it when restoring a model
-        with tf.control_dependencies(update_ops):
-            train_op = optimizer.minimize(loss_ctc, global_step=global_step)
+        opt_op = optimizer.minimize(loss_ctc, global_step=global_step)
+        with tf.control_dependencies(update_ops + [opt_op]):
+            train_op = tf.group(maintain_averages_op)
 
         # Summaries
         # ---------
@@ -312,7 +303,7 @@ def crnn_fn(features, labels, mode, params):
     else:
         loss_ctc, train_op = None, None
 
-    if mode in [tf.estimator.ModeKeys.EVAL, tf.estimator.ModeKeys.PREDICT]:
+    if mode in [tf.estimator.ModeKeys.EVAL, tf.estimator.ModeKeys.PREDICT, tf.estimator.ModeKeys.TRAIN]:
         with tf.name_scope('code2str_conversion'):
             keys = tf.cast(parameters.alphabet_decoding_codes, tf.int64)
             values = [c for c in parameters.alphabet_decoding]
@@ -341,7 +332,11 @@ def crnn_fn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('evaluation'):
             CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
-            accuracy = tf.metrics.accuracy(labels, predictions_dict['words'], name='accuracy')
+
+            # Convert label codes to decoding alphabet to compare predicted and groundtrouth words
+            target_chars = table_int2str.lookup(tf.cast(sparse_code_target, tf.int64))
+            target_words = get_words_from_chars(target_chars.values, seq_lengths_labels)
+            accuracy = tf.metrics.accuracy(target_words, predictions_dict['words'], name='accuracy')
 
             eval_metric_ops = {
                                'eval/accuracy': accuracy,
@@ -350,11 +345,6 @@ def crnn_fn(features, labels, mode, params):
     else:
         eval_metric_ops = None
 
-    # Export outputs
-    # export_outputs = {'predictions': tf.estimator.export.PredictOutput({'words': predictions_dict['words'],
-    #                                                                     'difference_logprob':
-    #                                                                         predictions_dict['difference_logprob']
-    #                                                                     })}
     export_outputs = {'predictions': tf.estimator.export.PredictOutput(predictions_dict)}
 
     return tf.estimator.EstimatorSpec(
