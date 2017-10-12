@@ -10,41 +10,38 @@ try:
     import better_exceptions
 except ImportError:
     pass
+from src.config import Params, import_params_from_json
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_dir', type=str, help='Directory of model to be exported', default='./model')
-    parser.add_argument('-e', '--export_dir', type=str, help='Directory for exported model', default='./exported_model')
-    args = parser.parse_args()
+    parser.add_argument('-e', '--output_dir', type=str, help='Output directory (for exported model)', default='./exported_model')
+    parser.add_argument('-g', '--gpu', type=str, help='GPU 1, 0 or '' for CPU', default='')
+    args = vars(parser.parse_args())
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-    # config_sess.gpu_options.visible_devices
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.get('gpu')
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.6
 
-    model_params = {
-            'input_shape': (32, 100),
-            'starting_learning_rate': 0.0001,
-            'optimizer': 'adam',
-            'decay_rate': 0.9,
-            'decay_steps': 10000,
-            'digits_only': True
-        }
+    # Import parameters from the json file
+    params_json = import_params_from_json(args.get('model_dir'))
+    params = Params(**params_json)
 
+    # Config
     est_config = tf.estimator.RunConfig()
-    est_config._keep_checkpoint_max = 10
-    est_config._save_checkpoints_steps = 100
-    est_config._session_config = config_sess
-    est_config._save_checkpoints_secs = None
-    est_config._save_summary_steps = 1
+    est_config.replace(keep_checkpoint_max=10,
+                       save_checkpoints_steps=params.save_interval,
+                       session_config=config_sess,
+                       save_checkpoints_secs=None,
+                       save_summary_steps=1000)
 
-    estimator = tf.estimator.Estimator(model_fn=crnn_fn, params=model_params,
-                                       model_dir=args.model_dir,
+    estimator = tf.estimator.Estimator(model_fn=crnn_fn, params=params,
+                                       model_dir=args.get('model_dir'),
                                        config=est_config,
                                        )
 
-    estimator.export_savedmodel(args.export_dir,
+    estimator.export_savedmodel(args.get('export_dir'),
                                 serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
 
 

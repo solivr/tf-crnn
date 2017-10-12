@@ -4,10 +4,7 @@ __author__ = 'solivr'
 import os
 import json
 import time
-
-
-class CONST:
-    DIMENSION_REDUCTION_W_POOLING = 2*2  # 2x2 pooling in dimension W on layer 1 and 2
+from glob import glob
 
 
 class CONST:
@@ -41,6 +38,13 @@ class Alphabet:
         'letters_extended': LETTERS_EXTENDED,
         'letters_digits_extended': LETTERS_DIGITS_EXTENDED
     }
+    AlphabetsList = [DIGITS_ONLY, LETTERS_DIGITS, LETTERS_DIGITS_LOWERCASE, LETTERS_ONLY, LETTERS_ONLY_LOWERCASE,
+                        LETTERS_EXTENDED, LETTERS_EXTENDED_LOWERCASE, LETTERS_DIGITS_EXTENDED,
+                        LETTERS_DIGITS_EXTENDED_LOWERCASE]
+    LowercaseAlphabetsList = [LETTERS_DIGITS_LOWERCASE, LETTERS_ONLY_LOWERCASE,
+                              LETTERS_EXTENDED_LOWERCASE, LETTERS_DIGITS_EXTENDED_LOWERCASE]
+    FullAlphabetList = [DIGITS_ONLY, LETTERS_DIGITS, LETTERS_ONLY,
+                        LETTERS_EXTENDED, LETTERS_DIGITS_EXTENDED]
 
     # This are codes for the case DecodingList = 'lowercase'
     CODES_DIGITS_ONLY = list(range(len(Digits) + 1))
@@ -93,8 +97,6 @@ class Params:
 
         assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
 
-        assert self._optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self._optimizer)
-
         self._assign_alphabet(alphabet_decoding_list=Alphabet.DecodingList)
 
     def export_experiment_params(self):
@@ -104,16 +106,19 @@ class Params:
         with open(filename, 'w') as f:
             json.dump(vars(self), f)
 
+    def show_experiment_params(self):
+        return vars(self)
+
     def _assign_alphabet(self, alphabet_decoding_list):
         assert (self.alphabet in Alphabet.LabelMapping.keys() or self.alphabet in Alphabet.LabelMapping.values()), \
             'Unknown alphabet {}'.format(self.alphabet)
-        assert self.alphabet_decoding in alphabet_decoding_list, \
+        assert (self.alphabet_decoding in alphabet_decoding_list) or (self.alphabet in Alphabet.AlphabetsList), \
             'Unknown alphabet decoding {}'.format(self.alphabet_decoding)
 
         if self.alphabet in Alphabet.LabelMapping.keys():
             self.alphabet = Alphabet.LabelMapping[self.alphabet]
 
-        if self.alphabet_decoding == 'lowercase':
+        if self.alphabet_decoding == 'lowercase' or self.alphabet_decoding in Alphabet.LowercaseAlphabetsList:
             if self.alphabet == Alphabet.LETTERS_DIGITS:
                 self.alphabet_decoding = Alphabet.LETTERS_DIGITS_LOWERCASE
                 self._alphabet_codes = Alphabet.CODES_LETTERS_DIGITS
@@ -137,7 +142,7 @@ class Params:
                 self._alphabet_codes = Alphabet.CODES_LETTERS_DIGITS_EXTENDED
                 self._alphabet_decoding_codes = Alphabet.CODES_LETTERS_DIGITS_EXTENDED_LOWERCASE
 
-        elif self.alphabet_decoding == 'same':
+        elif self.alphabet_decoding == 'same' or self.alphabet_decoding in Alphabet.FullAlphabetList:
             self.alphabet_decoding = self.alphabet
             self._alphabet_codes = list(range(len(self.alphabet)))
             self.blank_label_code = self._alphabet_codes[-1]
@@ -170,3 +175,23 @@ class Params:
     @property
     def alphabet_decoding_codes(self):
         return self._alphabet_decoding_codes
+
+
+def import_params_from_json(model_directory: str) -> dict:
+    # Import parameters from the json file
+    try:
+        json_filename = glob(os.path.join(model_directory, 'model_params*.json'))[-1]
+    except IndexError:
+        print('No json found')
+        raise FileNotFoundError
+
+    with open(json_filename, 'r') as data_json:
+        params_json = json.load(data_json)
+
+    # Remove 'private' keys
+    keys = list(params_json.keys())
+    for key in keys:
+        if key[0] == '_':
+            params_json.pop(key)
+
+    return params_json
