@@ -252,7 +252,7 @@ def crnn_fn(features, labels, mode, params):
         # Convert string label to code label
         with tf.name_scope('str2code_conversion'):
             table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
-            splited = tf.string_split(labels, delimiter='')
+            splited = tf.string_split(labels, delimiter='')  # TODO change string split to utf8 split in next tf version
             codes = table_str2int.lookup(splited.values)
             sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
 
@@ -271,6 +271,7 @@ def crnn_fn(features, labels, mode, params):
                                       ignore_longer_outputs_than_inputs=True,  # returns zero gradient in case it happens -> ema loss = NaN
                                       time_major=True)
             loss_ctc = tf.reduce_mean(loss_ctc)
+            loss_ctc = tf.Print(loss_ctc, [loss_ctc], message='* Loss : ')
 
         global_step = tf.train.get_or_create_global_step()
         # # Create an ExponentialMovingAverage object
@@ -333,11 +334,13 @@ def crnn_fn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('evaluation'):
             CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
+            CER = tf.Print(CER, [CER], message='-- CER : ')
 
             # Convert label codes to decoding alphabet to compare predicted and groundtrouth words
             target_chars = table_int2str.lookup(tf.cast(sparse_code_target, tf.int64))
             target_words = get_words_from_chars(target_chars.values, seq_lengths_labels)
             accuracy = tf.metrics.accuracy(target_words, predictions_dict['words'], name='accuracy')
+            accuracy = tf.Print(accuracy, [accuracy], message='-- Accuracy : ')
 
             eval_metric_ops = {
                                'eval/accuracy': accuracy,
