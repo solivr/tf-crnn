@@ -15,8 +15,8 @@ class Alphabet:
     LettersLowercase = 'abcdefghijklmnopqrstuvwxyz'  # 26
     LettersCapitals = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # 26
     Digits = '0123456789'  # 10
-    # Symbols = " '.,:;-_=()[]{}"  # 15
-    Symbols = " '.,:-="  # 7
+    Symbols = " '.,:;-_=()[]{}/°"  # 17
+    # Symbols = " '.,:-="  # 7
     DecodingList = ['same', 'lowercase']
 
     BLANK_SYMBOL = '$'
@@ -39,8 +39,8 @@ class Alphabet:
         'letters_digits_extended': LETTERS_DIGITS_EXTENDED
     }
     AlphabetsList = [DIGITS_ONLY, LETTERS_DIGITS, LETTERS_DIGITS_LOWERCASE, LETTERS_ONLY, LETTERS_ONLY_LOWERCASE,
-                        LETTERS_EXTENDED, LETTERS_EXTENDED_LOWERCASE, LETTERS_DIGITS_EXTENDED,
-                        LETTERS_DIGITS_EXTENDED_LOWERCASE]
+                     LETTERS_EXTENDED, LETTERS_EXTENDED_LOWERCASE, LETTERS_DIGITS_EXTENDED,
+                     LETTERS_DIGITS_EXTENDED_LOWERCASE]
     LowercaseAlphabetsList = [LETTERS_DIGITS_LOWERCASE, LETTERS_ONLY_LOWERCASE,
                               LETTERS_EXTENDED_LOWERCASE, LETTERS_DIGITS_EXTENDED_LOWERCASE]
     FullAlphabetList = [DIGITS_ONLY, LETTERS_DIGITS, LETTERS_ONLY,
@@ -78,17 +78,23 @@ class Params:
     def __init__(self, **kwargs):
         self.train_batch_size = kwargs.get('train_batch_size', 100)
         self.eval_batch_size = kwargs.get('eval_batch_size', 200)
+        # Initial value of learining rate (exponential learning rate is used)
         self.learning_rate = kwargs.get('learning_rate', 1e-4)
+        # Learning rate decay for exponential learning rate
         self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
+        # Decay steps for exponential learning rate
         self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
         self.optimizer = kwargs.get('optimizer', 'adam')
         self.n_epochs = kwargs.get('n_epochs', 50)
         self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
         self.save_interval = kwargs.get('save_interval', 1e3)
+        # Shape of the image to be processed. The original with either be resized or pad depending on its original size
         self.input_shape = kwargs.get('input_shape', (32, 100))
+        # Either decode with the same alphabet or map capitals and lowercase letters to the same symbol (lowercase)
         self.alphabet_decoding = kwargs.get('alphabet_decoding', 'same')
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
         self.gpu = kwargs.get('gpu', '')
+        # Alphabet to use (from class Alphabet)
         self.alphabet = kwargs.get('alphabet')
         self.csv_files_train = kwargs.get('csv_files_train')
         self.csv_files_eval = kwargs.get('csv_files_eval')
@@ -177,13 +183,21 @@ class Params:
         return self._alphabet_decoding_codes
 
 
-def import_params_from_json(model_directory: str) -> dict:
-    # Import parameters from the json file
-    try:
-        json_filename = glob(os.path.join(model_directory, 'model_params*.json'))[-1]
-    except IndexError:
-        print('No json found')
-        raise FileNotFoundError
+def import_params_from_json(model_directory: str=None, json_filename: str=None) -> dict:
+
+    assert not all(p is None for p in [model_directory, json_filename]), 'One argument at least should not be None'
+
+    if model_directory:
+        # Import parameters from the json file
+        try:
+            json_filename = glob(os.path.join(model_directory, 'model_params*.json'))[-1]
+        except IndexError:
+            print('No json found in dir {}'.format(model_directory))
+            raise FileNotFoundError
+    else:
+        if not os.path.isfile(json_filename):
+            print('No json found with filename {}'.format(json_filename))
+            raise FileNotFoundError
 
     with open(json_filename, 'r') as data_json:
         params_json = json.load(data_json)

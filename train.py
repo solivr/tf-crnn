@@ -15,7 +15,7 @@ from src.model import crnn_fn
 from src.data_handler import data_loader
 from src.data_handler import preprocess_image_for_prediction
 
-from src.config import Params, Alphabet
+from src.config import Params, Alphabet, import_params_from_json
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -32,27 +32,28 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     if args.get('params_file'):
-        raise NotImplementedError
-
-    parameters = Params(train_batch_size=128,
-                        eval_batch_size=128,
-                        learning_rate=1e-3,  # 1e-3 recommended
-                        learning_decay_rate=0.95,
-                        learning_decay_steps=5000,
-                        evaluate_every_epoch=5,
-                        save_interval=5e3,
-                        input_shape=(32, 304),
-                        optimizer='adam',
-                        digits_only=False,
-                        alphabet=Alphabet.LETTERS_EXTENDED,
-                        alphabet_decoding='same',
-                        csv_delimiter=';',
-                        csv_files_eval=args.get('csv_files_eval'),
-                        csv_files_train=args.get('csv_files_train'),
-                        output_model_dir=args.get('output_model_dir'),
-                        n_epochs=args.get('nb_epochs'),
-                        gpu=args.get('gpu')
-                        )
+        dict_params = import_params_from_json(json_filename=args.get('params_file'))
+        parameters = Params(**dict_params)
+    else:
+        parameters = Params(train_batch_size=128,
+                            eval_batch_size=128,
+                            learning_rate=1e-3,  # 1e-3 recommended
+                            learning_decay_rate=0.95,
+                            learning_decay_steps=5000,
+                            evaluate_every_epoch=5,
+                            save_interval=5e3,
+                            input_shape=(32, 304),
+                            optimizer='adam',
+                            digits_only=False,
+                            alphabet=Alphabet.LETTERS_DIGITS_EXTENDED,
+                            alphabet_decoding='same',
+                            csv_delimiter=';',
+                            csv_files_eval=args.get('csv_files_eval'),
+                            csv_files_train=args.get('csv_files_train'),
+                            output_model_dir=args.get('output_model_dir'),
+                            n_epochs=args.get('nb_epochs'),
+                            gpu=args.get('gpu')
+                            )
 
     model_params = {
         'Params': parameters,
