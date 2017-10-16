@@ -18,7 +18,7 @@ This version uses the `tf.estimator.Estimator` to build the model.
 
 ### How to train a model
 The main script to launch is `train.py`. 
-To train the model, you should input a csv file with each row containing the filename of the image (full path) and its label (plain text) separated by a delimiting character (let's say ' ') :
+To train the model, you should input a csv file with each row containing the filename of the image (full path) and its label (plain text) separated by a delimiting character (let's say ';') :
 
 ```
 /full/path/to/image1.{jpg,png} string_label1
@@ -34,8 +34,10 @@ See `train.py` for more details on the options.
 
 ### Dependencies 
 * `tensorflow` (1.3)
-*  ~~`warpctc_tensorflow` (from Baidu's warp-CTC)~~ [shouldn't be needed anymore]
+* `tensorflow-tensorboard` (0.1.7) (not mandatory but useful to visualise loss, accuracy and inputs / outputs)
 * `tqdm` for progress bars
+* `json`
+* `glob`
 
 
 
