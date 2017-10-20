@@ -27,8 +27,7 @@ if __name__ == '__main__':
                         help='Directory for output', default='./estimator')
     parser.add_argument('-n', '--nb-epochs', type=int, default=30, help='Number of epochs')
     parser.add_argument('-g', '--gpu', type=str, help="GPU 0,1 or '' ", default='')
-    # TODO
-    parser.add_argument('-p', '--params-file', type=str, help='Parameters filename (not implemented yet)', default=None)
+    parser.add_argument('-p', '--params-file', type=str, help='Parameters filename', default=None)
     args = vars(parser.parse_args())
 
     if args.get('params_file'):
