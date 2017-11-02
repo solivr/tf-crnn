@@ -21,8 +21,8 @@ The main script to launch is `train.py`.
 To train the model, you should input a csv file with each row containing the filename of the image (full path) and its label (plain text) separated by a delimiting character (let's say ';') :
 
 ```
-/full/path/to/image1.{jpg,png} string_label1
-/full/path/to/image2.{jpg,png} string_label2
+/full/path/to/image1.{jpg,png};string_label1
+/full/path/to/image2.{jpg,png};string_label2
 ...
 ```
 
