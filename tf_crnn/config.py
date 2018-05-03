@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
+__license__ = "GPL"
 
 import os
 import json
@@ -15,7 +16,7 @@ class Alphabet:
     LettersLowercase = 'abcdefghijklmnopqrstuvwxyz'  # 26
     LettersCapitals = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # 26
     Digits = '0123456789'  # 10
-    Symbols = " '.,:;-_=()[]{}/°"  # 17
+    Symbols = " '.,:;-_=()[]{}/"  # 16
     # Symbols = " '.,:-="  # 7
     DecodingList = ['same', 'lowercase']
 

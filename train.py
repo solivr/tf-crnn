@@ -1,21 +1,23 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
+__license__ = "GPL"
 
 import argparse
-import os
 import csv
+import os
+
 import numpy as np
+
 try:
     import better_exceptions
 except ImportError:
     pass
 from tqdm import trange
 import tensorflow as tf
-from src.model import crnn_fn
-from src.data_handler import data_loader
-from src.data_handler import preprocess_image_for_prediction
+from tf_crnn.model import crnn_fn
+from tf_crnn.data_handler import data_loader, preprocess_image_for_prediction
+from tf_crnn.config import Params, Alphabet, import_params_from_json
 
-from src.config import Params, Alphabet, import_params_from_json
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

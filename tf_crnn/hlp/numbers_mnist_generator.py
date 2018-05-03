@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
+__license__ = "GPL"
 
 from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np

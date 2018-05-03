@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
+__license__ = "GPL"
 
 import tensorflow as tf
 import numpy as np

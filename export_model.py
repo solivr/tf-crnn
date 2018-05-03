@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 __author__ = 'solivr'
+__license__ = "GPL"
 
-from src.data_handler import preprocess_image_for_prediction
-from src.model import crnn_fn
-import tensorflow as tf
-import os
 import argparse
+import os
+
+import tensorflow as tf
+
+from tf_crnn.model import crnn_fn
+from tf_crnn.data_handler import preprocess_image_for_prediction
+from tf_crnn.config import Params, import_params_from_json
 try:
     import better_exceptions
 except ImportError:
     pass
-from src.config import Params, import_params_from_json
 
 
 if __name__ == '__main__':
