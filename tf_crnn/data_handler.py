@@ -5,15 +5,15 @@ __license__ = "GPL"
 import tensorflow as tf
 import numpy as np
 from .config import Params, CONST
-from typing import Tuple
+from typing import Tuple, Union, List
 
 
-def data_loader(csv_filename: str, params: Params, batch_size: int=128, data_augmentation: bool=False,
+def data_loader(csv_filename: Union[List[str], str], params: Params, batch_size: int=128, data_augmentation: bool=False,
                 num_epochs: int=None, image_summaries: bool=False):
 
     def input_fn():
         # Choose case one csv file or list of csv files
-        if not isinstance(csv_filename, list):
+        if isinstance(csv_filename, str):
             filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=num_epochs, name='filename_queue')
         elif isinstance(csv_filename, list):
             filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs, name='filename_queue')
@@ -112,6 +112,7 @@ def augment_data(image: tf.Tensor) -> tf.Tensor:
         # Random padding
         image = random_padding(image)
 
+        # TODO : add random scaling
         image = tf.image.random_brightness(image, max_delta=0.1)
         image = tf.image.random_contrast(image, 0.5, 1.5)
         image = random_rotation(image, 0.05, crop=True)
@@ -178,7 +179,7 @@ def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increm
 
             img_resized.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
 
-            return img_resized, target_shape
+            return img_resized, tuple(target_shape)
 
     # 3 cases
     pad_image, (new_h, new_w) = tf.case(

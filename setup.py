@@ -6,6 +6,8 @@ from setuptools import setup, find_packages
 
 setup(name='tf_crnn',
       version='0.4.1',
+      license='GPL',
+      author='Sofia Ares Oliveira',
       url='https://github.com/solivr/tf-crnn',
       description='TensorFlow Convolutional Recurrent Neural Network (CRNN)',
       install_requires=[

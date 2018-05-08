@@ -109,20 +109,29 @@ class Alphabet:
     #                                                      len(Symbols) + 1))
 
 
-class Params:
+class TrainingParams:
     def __init__(self, **kwargs):
-        self.train_batch_size = kwargs.get('train_batch_size', 100)
-        self.eval_batch_size = kwargs.get('eval_batch_size', 200)
+        self.n_epochs = kwargs.get('n_epochs', 50)
+        self.train_batch_size = kwargs.get('train_batch_size', 64)
+        self.eval_batch_size = kwargs.get('eval_batch_size', 128)
         # Initial value of learining rate (exponential learning rate is used)
         self.learning_rate = kwargs.get('learning_rate', 1e-4)
         # Learning rate decay for exponential learning rate
         self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
         # Decay steps for exponential learning rate
         self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
-        self.optimizer = kwargs.get('optimizer', 'adam')
-        self.n_epochs = kwargs.get('n_epochs', 50)
         self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
         self.save_interval = kwargs.get('save_interval', 1e3)
+        self.optimizer = kwargs.get('optimizer', 'adam')
+
+        assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
+
+    def to_dict(self):
+        return self.__dict__
+
+
+class Params:
+    def __init__(self, **kwargs):
         # Shape of the image to be processed. The original with either be resized or pad depending on its original size
         self.input_shape = kwargs.get('input_shape', (32, 100))
         # Either decode with the same alphabet or map capitals and lowercase letters to the same symbol (lowercase)
@@ -142,12 +151,14 @@ class Params:
         # self._assign_alphabet(alphabet_decoding_list=Alphabet.DecodingList)
         self._assign_alphabet()
 
-    def export_experiment_params(self):
-        if not os.path.isdir(self.output_model_dir):
-            os.mkdir(self.output_model_dir)
-        filename = os.path.join(self.output_model_dir, 'model_params_{}.json'.format(round(time.time())))
-        with open(filename, 'w') as f:
-            json.dump(vars(self), f)
+
+
+    # def export_experiment_params(self):
+    #     if not os.path.isdir(self.output_model_dir):
+    #         os.mkdir(self.output_model_dir)
+    #     filename = os.path.join(self.output_model_dir, 'model_params_{}.json'.format(round(time.time())))
+    #     with open(filename, 'w') as f:
+    #         json.dump(vars(self), f)
 
     def show_experiment_params(self):
         return vars(self)
