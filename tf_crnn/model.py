@@ -5,7 +5,7 @@ __license__ = "GPL"
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
 from .decoding import get_words_from_chars
-from .config import Params, CONST
+from .config import Params, TrainingParams, CONST
 
 
 def weightVar(shape, mean=0.0, stddev=0.02, name='weights'):
@@ -222,7 +222,9 @@ def crnn_fn(features, labels, mode, params):
     """
 
     parameters = params.get('Params')
+    training_params = params.get('TrainingParams')
     assert isinstance(parameters, Params)
+    assert isinstance(training_params, TrainingParams)
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         parameters.keep_prob_dropout = 0.7
@@ -285,15 +287,16 @@ def crnn_fn(features, labels, mode, params):
 
         # Train op
         # --------
-        learning_rate = tf.train.exponential_decay(parameters.learning_rate, global_step,
-                                                   parameters.learning_decay_steps, parameters.learning_decay_rate,
+        learning_rate = tf.train.exponential_decay(training_params.learning_rate, global_step,
+                                                   training_params.learning_decay_steps,
+                                                   training_params.learning_decay_rate,
                                                    staircase=True)
 
-        if parameters.optimizer == 'ada':
+        if training_params.optimizer == 'ada':
             optimizer = tf.train.AdadeltaOptimizer(learning_rate)
-        elif parameters.optimizer == 'adam':
+        elif training_params.optimizer == 'adam':
             optimizer = tf.train.AdamOptimizer(learning_rate, beta1=0.5)
-        elif parameters.optimizer == 'rms':
+        elif training_params.optimizer == 'rms':
             optimizer = tf.train.RMSPropOptimizer(learning_rate)
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)

@@ -41,6 +41,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
 
     model_params = {
         'Params': parameters,
+        'TrainingParams': training_params
     }
 
     # parameters.export_experiment_params()
