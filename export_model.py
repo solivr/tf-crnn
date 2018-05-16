@@ -4,9 +4,7 @@ __license__ = "GPL"
 
 import argparse
 import os
-
 import tensorflow as tf
-
 from tf_crnn.model import crnn_fn
 from tf_crnn.data_handler import preprocess_image_for_prediction
 from tf_crnn.config import Params, import_params_from_json

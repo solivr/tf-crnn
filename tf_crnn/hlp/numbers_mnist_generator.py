@@ -6,7 +6,7 @@ from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
 import os
 import csv
-import scipy.misc
+from imageio import imsave
 from tqdm import tqdm
 import random
 import argparse
@@ -46,7 +46,7 @@ def generate_random_image_numbers(mnist_dir, dataset, output_dir, csv_filename, 
         # Save image number
         img_filename = '{:09}_{}.jpg'.format(i, stacked_label)
         img_path = os.path.join(output_dir_img, img_filename)
-        scipy.misc.imsave(img_path, stacked_number)
+        imsave(img_path, stacked_number)
 
         # Add to list of paths and list of labels
         list_paths.append(img_filename)

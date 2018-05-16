@@ -5,9 +5,7 @@ __license__ = "GPL"
 import argparse
 import csv
 import os
-
 import numpy as np
-
 try:
     import better_exceptions
 except ImportError:
