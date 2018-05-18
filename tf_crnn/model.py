@@ -2,7 +2,6 @@
 __author__ = 'solivr'
 __license__ = "GPL"
 
-
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
 from .decoding import get_words_from_chars
@@ -185,8 +184,8 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=T
             rnn_reshaped = tf.reshape(lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
 
         with tf.variable_scope('fully_connected'):
-            W = weightVar([list_n_hidden[-1]*2, params.n_classes])
-            b = biasVar([params.n_classes])
+            W = weightVar([list_n_hidden[-1]*2, params.alphabet.n_classes])
+            b = biasVar([params.alphabet.n_classes])
             fc_out = tf.nn.bias_add(tf.matmul(rnn_reshaped, W), b)
 
             if summaries:
@@ -197,7 +196,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=T
                         if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
                 tf.summary.histogram('bias', bias)
 
-        lstm_out = tf.reshape(fc_out, [shape[0], -1, params.n_classes], name='reshape_out')  # [batch, width, n_classes]
+        lstm_out = tf.reshape(fc_out, [shape[0], -1, params.alphabet.n_classes], name='reshape_out')  # [batch, width, n_classes]
 
         raw_pred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
 
@@ -247,15 +246,17 @@ def crnn_fn(features, labels, mode, params):
 
     if not mode == tf.estimator.ModeKeys.PREDICT:
         # Alphabet and codes
-        keys = [c for c in parameters.alphabet]
-        values = parameters.alphabet_codes
+        # keys = [c for c in parameters.alphabet]
+        keys_alphabet_units = parameters.alphabet.alphabet_units
+        values_alphabet_codes = parameters.alphabet.codes
 
         # Convert string label to code label
         with tf.name_scope('str2code_conversion'):
-            table_str2int = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), -1)
-            splited = tf.string_split(labels, delimiter='')  # TODO change string split to utf8 split in next tf version
-            codes = table_str2int.lookup(splited.values)
-            sparse_code_target = tf.SparseTensor(splited.indices, codes, splited.dense_shape)
+            table_str2int = tf.contrib.lookup.HashTable(
+                tf.contrib.lookup.KeyValueTensorInitializer(keys_alphabet_units, values_alphabet_codes), -1)
+            labels_splited = tf.string_split(labels, delimiter='|')  # TODO change string split to utf8 split in next tf version
+            codes = table_str2int.lookup(labels_splited.values)
+            sparse_code_target = tf.SparseTensor(labels_splited.indices, codes, labels_splited.dense_shape)
 
         seq_lengths_labels = tf.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
                                          minlength=tf.shape(predictions_dict['prob'])[1])
@@ -263,7 +264,8 @@ def crnn_fn(features, labels, mode, params):
         # Loss
         # ----
         # >>> Cannot have longer labels than predictions -> error
-        with tf.control_dependencies([tf.less_equal(sparse_code_target.dense_shape[1], tf.reduce_max(tf.cast(seq_len_inputs, tf.int64)))]):
+        with tf.control_dependencies([tf.less_equal(sparse_code_target.dense_shape[1],
+                                                    tf.reduce_max(tf.cast(seq_len_inputs, tf.int64)))]):
             loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
                                       inputs=predictions_dict['prob'],
                                       sequence_length=tf.cast(seq_len_inputs, tf.int32),
@@ -308,15 +310,17 @@ def crnn_fn(features, labels, mode, params):
 
     if mode in [tf.estimator.ModeKeys.EVAL, tf.estimator.ModeKeys.PREDICT, tf.estimator.ModeKeys.TRAIN]:
         with tf.name_scope('code2str_conversion'):
-            keys = tf.cast(parameters.alphabet_decoding_codes, tf.int64)
-            values = [c for c in parameters.alphabet_decoding]
-            table_int2str = tf.contrib.lookup.HashTable(tf.contrib.lookup.KeyValueTensorInitializer(keys, values), '?')
+            keys_alphabet_codes = tf.cast(parameters.alphabet.codes, tf.int64)
+            values_alphabet_units = [c for c in parameters.alphabet.alphabet_units]
+            table_int2str = tf.contrib.lookup.HashTable(
+                tf.contrib.lookup.KeyValueTensorInitializer(keys_alphabet_codes, values_alphabet_units), '?')
 
-            sparse_code_pred, log_probability = tf.nn.ctc_beam_search_decoder(predictions_dict['prob'],
-                                                                              sequence_length=tf.cast(seq_len_inputs, tf.int32),
-                                                                              merge_repeated=False,
-                                                                              beam_width=100,
-                                                                              top_paths=2)
+            sparse_code_pred, log_probability = tf.nn.ctc_beam_search_decoder(
+                predictions_dict['prob'],
+                sequence_length=tf.cast(seq_len_inputs, tf.int32),
+                merge_repeated=False,
+                beam_width=100,
+                top_paths=2)
             # Score
             predictions_dict['score'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
             # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
