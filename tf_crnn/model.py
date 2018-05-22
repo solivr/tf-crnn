@@ -248,7 +248,6 @@ def crnn_fn(features, labels, mode, params):
 
     if not mode == tf.estimator.ModeKeys.PREDICT:
         # Alphabet and codes
-        # keys = [c for c in parameters.alphabet]
         keys_alphabet_units = parameters.alphabet.alphabet_units
         values_alphabet_codes = parameters.alphabet.codes
 
@@ -256,7 +255,7 @@ def crnn_fn(features, labels, mode, params):
         with tf.name_scope('str2code_conversion'):
             table_str2int = tf.contrib.lookup.HashTable(
                 tf.contrib.lookup.KeyValueTensorInitializer(keys_alphabet_units, values_alphabet_codes), -1)
-            labels_splited = tf.string_split(labels, delimiter='|')  # TODO change string split to utf8 split in next tf version
+            labels_splited = tf.string_split(labels, delimiter='|')
             codes = table_str2int.lookup(labels_splited.values)
             sparse_code_target = tf.SparseTensor(labels_splited.indices, codes, labels_splited.dense_shape)
 
@@ -273,7 +272,8 @@ def crnn_fn(features, labels, mode, params):
                                       sequence_length=tf.cast(seq_len_inputs, tf.int32),
                                       preprocess_collapse_repeated=False,
                                       ctc_merge_repeated=True,
-                                      ignore_longer_outputs_than_inputs=True,  # returns zero gradient in case it happens -> ema loss = NaN
+                                      # ignore... = True : returns zero gradient in case it happens -> loss = NaN
+                                      ignore_longer_outputs_than_inputs=True,
                                       time_major=True)
             loss_ctc = tf.reduce_mean(loss_ctc)
             loss_ctc = tf.Print(loss_ctc, [loss_ctc], message='* Loss : ')

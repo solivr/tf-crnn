@@ -26,8 +26,7 @@ def default_config():
     csv_files_eval = None
     output_model_dir = None
     gpu = ''
-    alphabet = ''
-    alphabet_decoding = ''
+    lookup_alphabet_file = ''
     input_shape = (32, 100)
     training_params = TrainingParams().to_dict()
 

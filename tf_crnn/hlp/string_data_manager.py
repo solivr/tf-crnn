@@ -72,16 +72,32 @@ def format_string_for_tf_split(string_to_format: str, separator_character: str= 
     if replace_brackets_abbreviations:
         # Replace "[]" chars by "|"
         string_to_format = string_to_format.replace("[", separator_character).replace("]", separator_character)
-    # Split words
-    tokens = string_to_format.split(' ')
 
-    final_string = ''
-    for tk in tokens:
-        if tk[0] == separator_character:  # Case for abbreviation
-            final_string += '{} '.format(tk)
-        else:  # Case for 'standard' word
-            final_string += '{} '.format(tk.replace('', separator_character))
-    return final_string[:-1]
+    splits = string_to_format.split(separator_character)
+
+    final_string = separator_character
+    # Case where string starts with a separator_character
+    if splits[0] == '':
+        for i, sp in enumerate(splits):
+            if i % 2 > 0:  # uneven -> abbreviation
+                final_string += separator_character + sp + separator_character
+            else:  # even -> no abbreviation
+                final_string += sp.replace('', separator_character)[1:-1]
+
+    else:
+        for i, sp in enumerate(splits):
+            if i % 2 > 0:  # uneven -> no abbreviation
+                final_string += separator_character + sp + separator_character
+            else:  # even -> abbreviation
+                final_string += sp.replace('', separator_character)[1:-1]
+
+    # Add separator at beginning or end of string if it hasn't been added yet
+    if final_string[1] == separator_character:
+        final_string = final_string[1:]
+    if final_string[-1] != separator_character:
+        final_string += separator_character
+
+    return final_string
 
 
 def lower_abbreviation_in_string(string_to_format: str):
