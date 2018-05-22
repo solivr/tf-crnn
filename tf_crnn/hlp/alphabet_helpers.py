@@ -47,10 +47,15 @@ def make_json_lookup_alphabet(string_chars: str=None, csv_filenames: Union[List[
         alphabet_units = get_alphabet_units_form_csv(csv_filenames)
         lookup.update({abbrev: offset + i for i, abbrev in enumerate(alphabet_units)})
 
-    return lookup
+    return map_lookup(lookup)
 
 
 def load_lookup_from_json(json_filenames: Union[List[str], str])-> dict:
+    """
+    Load a lookup table from a json file to a dictionnary
+    :param json_filenames: either a filename or a list of filenames
+    :return:
+    """
 
     lookup = dict()
     if isinstance(json_filenames, list):
@@ -63,4 +68,30 @@ def load_lookup_from_json(json_filenames: Union[List[str], str])-> dict:
         with open(json_filenames, 'r', encoding='utf8') as f:
             lookup = json.load(f)
 
-    return lookup
+    return map_lookup(lookup)
+
+
+def map_lookup(lookup_table: dict, unique_entry: bool=True)-> dict:
+    """
+    Converts an existing lookup table with minimal range code ([0, len(lookup_table)-1])
+    and avoids multiple instances of the same code label (bijectivity)
+    :param lookup_table: dictionary to be mapped {alphabet_unit : code label}
+    :param unique_entry: If each alphabet unit has a unique code and each code a unique alphabet unique ('bijective'),
+                        only True is implemented for now
+    :return: a mapped dictionary
+    """
+
+    # Create tuple (alphabet unit, code)
+    tuple_char_code = list(zip(list(lookup_table.keys()), list(lookup_table.values())))
+    # Sort by code
+    tuple_char_code.sort(key=lambda x: x[1])
+
+    # If each alphabet unit has a unique code and each code a unique alphabet unique ('bijective')
+    if unique_entry:
+        mapped_lookup = [[tp[0], i] for i, tp in enumerate(tuple_char_code)]
+    else:
+        raise NotImplementedError
+        # Todo
+
+    return dict(mapped_lookup)
+
