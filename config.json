@@ -3,16 +3,15 @@
     "learning_rate" : 1e-3,
     "learning_decay_rate" : 0.95,
     "learning_decay_steps" : 5000,
-    "save_interval" : 5e3,
+    "save_interval" : 1e3,
     "n_epochs" : 50,
-    "train_batch_size" : 64,
-    "eval_batch_size" : 128
+    "train_batch_size" : 32,
+    "eval_batch_size" : 64
   },
   "input_shape" : [32, 304],
-  "alphabet" : "letters_digits_extended",
-  "alphabet_decoding" : "same",
-  "csv_files_train" : ["/mnt/cluster-nas/sofia/DT_handwrittings/vtm_data/letters_train_abs.csv"],
-  "csv_files_eval" : ["/mnt/cluster-nas/sofia/DT_handwrittings/vtm_data/letters_val_abs.csv"],
+  "lookup_alphabet_file" : "./tf_crnn/data/lookup_letters_digits_symbols_abbrev.json",
+  "csv_files_train" : ["/mnt/cluster-nas/sofia/DT_handwrittings/vtm_data/mixed_numbers_letters_abbrev/mixed_numbers_letters_abbrev_abspath_tfformat_train.csv"],
+  "csv_files_eval" : ["/mnt/cluster-nas/sofia/DT_handwrittings/vtm_data/mixed_numbers_letters_abbrev/mixed_numbers_letters_abbrev_abspath_tfformat_eval.csv"],
   "output_model_dir" : "/mnt/cluster-nas/sofia/tf_tmp_models/crnn",
   "gpu" : "0"
 }
