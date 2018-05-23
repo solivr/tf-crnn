@@ -13,7 +13,6 @@ class CONST:
 
 
 class Alphabet:
-    # TODO Updating
     def __init__(self, lookup_alphabet_file: str=None, blank_symbol: str='$'):
         self._blank_symbol = blank_symbol
 
@@ -81,13 +80,6 @@ class Params:
         self._keep_prob_dropout = kwargs.get('keep_prob')
 
         self._assign_alphabet()
-
-    # def export_experiment_params(self):
-    #     if not os.path.isdir(self.output_model_dir):
-    #         os.mkdir(self.output_model_dir)
-    #     filename = os.path.join(self.output_model_dir, 'model_params_{}.json'.format(round(time.time())))
-    #     with open(filename, 'w') as f:
-    #         json.dump(vars(self), f)
 
     def show_experiment_params(self):
         return vars(self)

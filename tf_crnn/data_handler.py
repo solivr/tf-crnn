@@ -8,7 +8,7 @@ from .config import Params, CONST
 from typing import Tuple, Union, List
 
 
-def data_loader(csv_filename: Union[List[str], str], params: Params, batch_size: int=128, data_augmentation: bool=False,
+def data_loader(csv_filename: Union[List[str], str], params: Params, batch_size: int=64, data_augmentation: bool=False,
                 num_epochs: int=None, image_summaries: bool=False):
 
     def input_fn():
@@ -73,6 +73,13 @@ def image_reading(path: str, resized_size: Tuple[int, int]=None, data_augmentati
 
 
 def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # from SeguinBe
+    """
+    Rotates an image with a random angle
+    :param img: Tensor
+    :param max_rotation: maximum angle to rotate (radians)
+    :param crop: boolean to crop or not the image after rotation
+    :return:
+    """
     with tf.name_scope('RandomRotation'):
         rotation = tf.random_uniform([], -max_rotation, max_rotation)
         rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
@@ -99,6 +106,15 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
 
 
 def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.Tensor:
+    """
+    Given an image will pad its border adding a random number of rows and columns
+    :param image: image to pad
+    :param max_pad_w: maximum padding in width
+    :param max_pad_h: maximum padding in height
+    :return: a padded image
+    """
+    # TODO specify image shape in doc
+
     w_pad = list(np.random.randint(0, max_pad_w, size=[2]))
     h_pad = list(np.random.randint(0, max_pad_h, size=[2]))
     paddings = [h_pad, w_pad, [0, 0]]
@@ -107,6 +123,11 @@ def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.
 
 
 def augment_data(image: tf.Tensor) -> tf.Tensor:
+    """
+    Data augmentation on an image (padding, brightness, contrast, rotation)
+    :param image: Tensor
+    :return: Tensor
+    """
     with tf.name_scope('DataAugmentation'):
 
         # Random padding
