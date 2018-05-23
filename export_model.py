@@ -2,47 +2,53 @@
 __author__ = 'solivr'
 __license__ = "GPL"
 
-import argparse
 import os
 import tensorflow as tf
+import click
 from tf_crnn.model import crnn_fn
 from tf_crnn.data_handler import preprocess_image_for_prediction
-from tf_crnn.config import Params, import_params_from_json
+from tf_crnn.config import Params, TrainingParams, import_params_from_json
 try:
     import better_exceptions
 except ImportError:
     pass
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--model_dir', type=str, help='Directory of model to be exported', default='./model')
-    parser.add_argument('-e', '--output_dir', type=str, help='Output directory (for exported model)', default='./exported_model')
-    parser.add_argument('-g', '--gpu', type=str, help='GPU 1, 0 or '' for CPU', default='')
-    args = vars(parser.parse_args())
+@click.command()
+@click.argument('--model-directory', help='Path to model directory')
+@click.argument('--output-dir', help='Output directory')
+@click.option('gpu', default='0', help='Which GPU to use')
+def export_model(model_directory: str, output_dir: str, gpu: str):
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.get('gpu')
+    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.6
 
     # Import parameters from the json file
-    params_json = import_params_from_json(args.get('model_dir'))
-    params = Params(**params_json)
+    params_json = import_params_from_json(json_filename=os.path.join(model_directory, 'config.json'))
+    training_params = TrainingParams(**params_json['training_params'])
+    parameters = Params(**params_json)
+
+    model_params = {
+        'Params': parameters,
+        'TrainingParams': training_params
+    }
 
     # Config
     est_config = tf.estimator.RunConfig()
     est_config.replace(keep_checkpoint_max=10,
-                       save_checkpoints_steps=params.save_interval,
+                       save_checkpoints_steps=training_params.save_interval,
                        session_config=config_sess,
                        save_checkpoints_secs=None,
                        save_summary_steps=1000)
 
-    estimator = tf.estimator.Estimator(model_fn=crnn_fn, params=params,
-                                       model_dir=args.get('model_dir'),
+    estimator = tf.estimator.Estimator(model_fn=crnn_fn,
+                                       params=model_params,
+                                       model_dir=model_directory,
                                        config=est_config,
                                        )
 
-    estimator.export_savedmodel(args.get('export_dir'),
+    estimator.export_savedmodel(output_dir,
                                 serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
 
 

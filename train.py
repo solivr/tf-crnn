@@ -4,6 +4,7 @@ __license__ = "GPL"
 
 import csv
 import os
+import json
 import numpy as np
 from sacred import Experiment
 from tqdm import trange
@@ -43,7 +44,8 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         'TrainingParams': training_params
     }
 
-    # parameters.export_experiment_params()
+    with open(os.path.join(output_model_dir, 'config.json'), 'w') as f:
+        json.dump(_config, f, indent=4, sort_keys=True)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     config_sess = tf.ConfigProto()
@@ -81,6 +83,9 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                                                  num_epochs=training_params.evaluate_every_epoch,
                                                  data_augmentation=True,
                                                  image_summaries=True))
+
+            estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
+                                        serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
 
             estimator.evaluate(input_fn=data_loader(csv_filename=csv_files_eval,
                                                     params=parameters,
