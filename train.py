@@ -2,10 +2,8 @@
 __author__ = 'solivr'
 __license__ = "GPL"
 
-import csv
 import os
 import json
-import numpy as np
 from sacred import Experiment
 from tqdm import trange
 import tensorflow as tf
@@ -30,11 +28,23 @@ def default_config():
     lookup_alphabet_file = ''
     input_shape = (32, 100)
     training_params = TrainingParams().to_dict()
+    restore_model = False
 
 
 @ex.automain
 def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir: str,
         gpu: str, training_params: dict, _config):
+
+    # Save config
+    if not os.path.isdir(output_model_dir):
+        os.makedirs(output_model_dir)
+    else:
+        assert _config.get('restore_model'), \
+            '{0} already exists, you cannot use it as output directory. ' \
+            'Set "restore_model=True" to continue training, or delete dir "rm -r {0}"'.format(output_model_dir)
+
+    with open(os.path.join(output_model_dir, 'config.json'), 'w') as f:
+        json.dump(_config, f, indent=4, sort_keys=True)
 
     parameters = Params(**_config)
     training_params = TrainingParams(**training_params)
@@ -43,9 +53,6 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         'Params': parameters,
         'TrainingParams': training_params
     }
-
-    with open(os.path.join(output_model_dir, 'config.json'), 'w') as f:
-        json.dump(_config, f, indent=4, sort_keys=True)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     config_sess = tf.ConfigProto()
@@ -67,13 +74,6 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                                        config=est_config
                                        )
 
-    # Count number of image filenames in csv
-    n_samples = 0
-    for file in csv_files_eval:
-        with open(file, 'r', encoding='utf8') as csvfile:
-            reader = csv.reader(csvfile, delimiter=parameters.csv_delimiter)
-            n_samples += len(list(reader))
-
     try:
         for e in trange(0, training_params.n_epochs, training_params.evaluate_every_epoch):
 
@@ -90,9 +90,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
             estimator.evaluate(input_fn=data_loader(csv_filename=csv_files_eval,
                                                     params=parameters,
                                                     batch_size=training_params.eval_batch_size,
-                                                    num_epochs=1),
-                               steps=np.floor(n_samples / training_params.eval_batch_size)
-                               )
+                                                    num_epochs=1))
 
     except KeyboardInterrupt:
         print('Interrupted')

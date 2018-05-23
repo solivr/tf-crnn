@@ -22,14 +22,10 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
     return tf.nn.conv2d(input, filter, strides=strides, padding=padding, name=name)
 
 
-def deep_cnn(input_imgs: tf.Tensor, is_training: bool, summaries: bool=True) -> tf.Tensor:
+def deep_cnn(input_imgs: tf.Tensor, input_channels: int, is_training: bool, summaries: bool=True) -> tf.Tensor:
+    assert (input_channels in [1, 3])
+
     input_tensor = input_imgs
-    if input_tensor.shape[-1] == 1:
-        input_channels = 1
-    elif input_tensor.shape[-1] == 3:
-        input_channels = 3
-    else:
-        raise NotImplementedError
 
     # Following source code, not paper
 
@@ -149,11 +145,15 @@ def deep_cnn(input_imgs: tf.Tensor, is_training: bool, summaries: bool=True) -> 
         cnn_net = conv7
 
         with tf.variable_scope('Reshaping_cnn'):
-            shape = cnn_net.get_shape().as_list()  # [batch, height, width, features]
+            # shape = cnn_net.get_shape().as_list()
+            shape = tf.shape(cnn_net)  # [batch, height, width, features]
             transposed = tf.transpose(cnn_net, perm=[0, 2, 1, 3],
                                       name='transposed')  # [batch, width, height, features]
-            conv_reshaped = tf.reshape(transposed, [shape[0], -1, shape[1] * shape[3]],
+            conv_reshaped = tf.reshape(transposed, [shape[0], shape[2], shape[1] * shape[3]],
                                        name='reshaped')  # [batch, width, height x features]
+            # Setting shape
+            shape_list = cnn_net.get_shape().as_list()
+            conv_reshaped.set_shape([None, shape_list[2], shape_list[1] * shape_list[3]])
 
     return conv_reshaped
 
@@ -180,8 +180,9 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=T
         lstm_net = tf.nn.dropout(lstm_net, keep_prob=params.keep_prob_dropout)
 
         with tf.variable_scope('Reshaping_rnn'):
-            shape = lstm_net.get_shape().as_list()  # [batch, width, 2*n_hidden]
-            rnn_reshaped = tf.reshape(lstm_net, [-1, shape[-1]])  # [batch x width, 2*n_hidden]
+            # shape = lstm_net.get_shape().as_list()  # [batch, width, 2*n_hidden]
+            shape = tf.shape(lstm_net)
+            rnn_reshaped = tf.reshape(lstm_net, [shape[0]*shape[1], shape[2]])  # [batch x width, 2*n_hidden]
 
         with tf.variable_scope('fully_connected'):
             W = weightVar([list_n_hidden[-1]*2, params.alphabet.n_classes])
@@ -196,7 +197,7 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=T
                         if var.name == 'deep_bidirectional_lstm/fully_connected/bias:0'][0]
                 tf.summary.histogram('bias', bias)
 
-        lstm_out = tf.reshape(fc_out, [shape[0], -1, params.alphabet.n_classes], name='reshape_out')  # [batch, width, n_classes]
+        lstm_out = tf.reshape(fc_out, [shape[0], shape[1], params.alphabet.n_classes], name='reshape_out')  # [batch, width, n_classes]
 
         raw_pred = tf.argmax(tf.nn.softmax(lstm_out), axis=2, name='raw_prediction')
 
@@ -213,10 +214,12 @@ def crnn_fn(features, labels, mode, params):
                             'images_widths'
                             'filenames'
                             }
-    :param labels: labels. flattend (1D) array with encoded label (one code per character)
+    :param labels: labels. string containing the transcription
+                    #flattend (1D) array with encoded label (one code per character)
     :param mode:
     :param params: dict {
-                            'Params'
+                            'Params',
+                            'TrainingParams'
                         }
     :return:
     """
@@ -231,7 +234,8 @@ def crnn_fn(features, labels, mode, params):
     else:
         parameters.keep_prob_dropout = 1.0
 
-    conv = deep_cnn(features['images'], (mode == tf.estimator.ModeKeys.TRAIN), summaries=False)
+    conv = deep_cnn(features['images'], input_channels=parameters.input_channels,
+                    is_training=(mode == tf.estimator.ModeKeys.TRAIN), summaries=False)
     logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters, summaries=False)
 
     # Compute seq_len from image width

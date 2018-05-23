@@ -8,71 +8,7 @@ from .config import Params, CONST
 from typing import Tuple, Union, List
 
 
-def data_loader(csv_filename: Union[List[str], str], params: Params, batch_size: int=64, data_augmentation: bool=False,
-                num_epochs: int=None, image_summaries: bool=False):
-
-    def input_fn():
-        # Choose case one csv file or list of csv files
-        if isinstance(csv_filename, str):
-            filename_queue = tf.train.string_input_producer([csv_filename], num_epochs=num_epochs, name='filename_queue')
-        elif isinstance(csv_filename, list):
-            filename_queue = tf.train.string_input_producer(csv_filename, num_epochs=num_epochs, name='filename_queue')
-
-        # Skip lines that have already been processed
-        reader = tf.TextLineReader(name='CSV_Reader', skip_header_lines=0)
-        key, value = reader.read(filename_queue, name='file_reading_op')
-
-        default_line = [['None'], ['None']]
-        path, label = tf.decode_csv(value, record_defaults=default_line, field_delim=params.csv_delimiter,
-                                    name='csv_reading_op')
-
-        image, img_width = image_reading(path, resized_size=params.input_shape,
-                                         data_augmentation=data_augmentation, padding=True)
-
-        to_batch = {'images': image, 'images_widths': img_width, 'filenames': path, 'labels': label}
-        prepared_batch = tf.train.shuffle_batch(to_batch,
-                                                batch_size=batch_size,
-                                                min_after_dequeue=500,
-                                                num_threads=15, capacity=4000,
-                                                allow_smaller_final_batch=False,
-                                                name='prepared_batch_queue')
-
-        if image_summaries:
-            tf.summary.image('input/image', prepared_batch.get('images'), max_outputs=1)
-        tf.summary.text('input/labels', prepared_batch.get('labels')[:10])
-        tf.summary.text('input/widths', tf.as_string(prepared_batch.get('images_widths')))
-
-        return prepared_batch, prepared_batch.get('labels')
-
-    return input_fn
-
-
-def image_reading(path: str, resized_size: Tuple[int, int]=None, data_augmentation: bool=False,
-                  padding: bool=False) -> Tuple[tf.Tensor, tf.Tensor]:
-    # Read image
-    image_content = tf.read_file(path, name='image_reader')
-    image = tf.cond(tf.equal(tf.string_split([path], '.').values[1], tf.constant('jpg', dtype=tf.string)),
-                    true_fn=lambda: tf.image.decode_jpeg(image_content, channels=1, try_recover_truncated=True), # TODO channels = 3 ?
-                    false_fn=lambda: tf.image.decode_png(image_content, channels=1), name='image_decoding')
-
-    # Data augmentation
-    if data_augmentation:
-        image = augment_data(image)
-
-    # Padding
-    if padding:
-        with tf.name_scope('padding'):
-            image, img_width = padding_inputs_width(image, resized_size, increment=CONST.DIMENSION_REDUCTION_W_POOLING)
-    # Resize
-    else:
-        image = tf.image.resize_images(image, size=resized_size)
-        img_width = tf.shape(image)[1]
-
-    with tf.control_dependencies([tf.assert_equal(image.shape[:2], resized_size)]):
-        return image, img_width
-
-
-def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # from SeguinBe
+def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # adapted from SeguinBe
     """
     Rotates an image with a random angle
     :param img: Tensor
@@ -81,7 +17,7 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
     :return:
     """
     with tf.name_scope('RandomRotation'):
-        rotation = tf.random_uniform([], -max_rotation, max_rotation)
+        rotation = tf.random_uniform([], -max_rotation, max_rotation, name='pick_random_angle')
         rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
         if crop:
             rotation = tf.abs(rotation)
@@ -95,12 +31,20 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
             new_h, new_w = tf.cond(h > w, lambda: [new_l, new_s], lambda: [new_s, new_l])
             new_h, new_w = tf.cast(new_h, tf.int32), tf.cast(new_w, tf.int32)
             bb_begin = tf.cast(tf.ceil((h-new_h)/2), tf.int32), tf.cast(tf.ceil((w-new_w)/2), tf.int32)
-            rotated_image_crop = rotated_image[bb_begin[0]:h - bb_begin[0], bb_begin[1]:w - bb_begin[1], :]
+            # Test sliced
+            rotated_image_crop = tf.cond(
+                tf.logical_and(bb_begin[0] < h - bb_begin[0], bb_begin[1] < w - bb_begin[1]),
+                true_fn=lambda: rotated_image[bb_begin[0]:h - bb_begin[0], bb_begin[1]:w - bb_begin[1], :],
+                false_fn=lambda: img,
+                name='check_slices_indices'
+            )
+            # rotated_image_crop = rotated_image[bb_begin[0]:h - bb_begin[0], bb_begin[1]:w - bb_begin[1], :]
 
             # If crop removes the entire image, keep the original image
             rotated_image = tf.cond(tf.equal(tf.size(rotated_image_crop), 0),
                                     true_fn=lambda: img,
-                                    false_fn=lambda: rotated_image_crop)
+                                    false_fn=lambda: rotated_image_crop,
+                                    name='check_size_crop')
 
         return rotated_image
 
@@ -145,7 +89,19 @@ def augment_data(image: tf.Tensor) -> tf.Tensor:
         return image
 
 
-def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increment: int) -> Tuple[tf.Tensor, tf.Tensor]:
+def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increment: int) \
+        -> Tuple[tf.Tensor, tf.Tensor]:
+    """
+    Given an input image, will pad it to return a target_shape size padded image.
+    There is 3 cases:
+         - image width > target width : simple resizing to shrink the image
+         -
+    :param image: Tensor of shape [H,W,C]
+    :param target_shape: final shape after padding [H, W]
+    :param increment: reduction factor due to pooling between input width and output width,
+                        this makes sure that the final width will be a multiple of increment
+    :return: (image padded, output width)
+    """
 
     target_ratio = target_shape[1]/target_shape[0]
     # Compute ratio to keep the same ratio in new image and get the size of padding
@@ -256,3 +212,92 @@ def preprocess_image_for_prediction(fixed_height: int=32, min_width: int=8):
         return tf.estimator.export.ServingInputReceiver(features, receiver_inputs)
 
     return serving_input_fn
+
+
+def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True, batch_size: int=64,
+                data_augmentation: bool=False, num_epochs: int=None, image_summaries: bool=False):
+    """
+    Loads, preprocesses (data augmentation, padding) and feeds the data
+    :param csv_filename: filename or list of filenames
+    :param params: Params object containing all the parameters
+    :param labels: transcription labels
+    :param batch_size: batch_size
+    :param data_augmentation: flag to select or not data augmentation
+    :param num_epochs: feeds the data 'num_epochs' times
+    :param image_summaries: floag to show image summaries or not
+    :return: data_loader function
+    """
+
+    if labels:
+        csv_types = [['None'], ['None']]
+        csv_column_names = ['filenames', 'labels']
+    else:
+        csv_types = [['None']]
+        csv_column_names = ['filenames']
+    padding = True
+
+    def input_fn():
+        with tf.name_scope('CSV_reading'):
+            dataset = tf.data.TextLineDataset(csv_filename)
+
+            # -- Parse each line.
+            def _parse_csv_line(line):
+                # Decode the line into its fields
+                fields = tf.decode_csv(line, record_defaults=csv_types,
+                                       field_delim=params.csv_delimiter, name='csv_reading_op')
+                # Pack the result into a dictionary
+                features = dict(zip(csv_column_names, fields))
+
+                return features
+
+            dataset = dataset.map(_parse_csv_line)
+
+        # -- Read image
+        def _image_reading_preprocessing(features: dict) -> dict():
+
+            # Load
+            image_content = tf.read_file(features['filenames'], name='filename_reader')
+            # decode image is not used because it seems the shape is not set...
+            # image = tf.image.decode_jpeg(image_content, channels=params.input_channels,
+            #                              try_recover_truncated=True,name='image_decoding_op')
+            # tensorflow v1.8 change to :
+            image = tf.cond(
+                tf.image.is_jpeg(image_content),
+                lambda: tf.image.decode_jpeg(image_content, channels=params.input_channels, name='image_decoding_op',
+                                             try_recover_truncated=True),
+                lambda: tf.image.decode_png(image_content, channels=params.input_channels, name='image_decoding_op'))
+
+            # Data augmentation
+            if data_augmentation:
+                image = augment_data(image)
+
+            # Padding
+            if padding:
+                with tf.name_scope('padding'):
+                    image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
+                                                            increment=CONST.DIMENSION_REDUCTION_W_POOLING)
+            # Resize
+            else:
+                image = tf.image.resize_images(image, size=params.input_shape)
+                img_width = tf.shape(image)[1]
+
+            # Update features
+            features.update({'images': image, 'images_widths': img_width})
+
+            return features
+
+        dataset = dataset.map(_image_reading_preprocessing)
+
+        # -- Shuffle, repeat, and batch features
+        dataset = dataset.shuffle(5000).batch(batch_size).repeat(num_epochs).prefetch(4)
+        dataset_iterator = dataset.make_one_shot_iterator()
+        prepared_batch = dataset_iterator.get_next()
+
+        if image_summaries:
+            tf.summary.image('input/image', prepared_batch['images'], max_outputs=1)
+        if labels:
+            tf.summary.text('input/labels', prepared_batch.get('labels')[:10])
+
+        return prepared_batch, prepared_batch.get('labels')
+
+    return input_fn

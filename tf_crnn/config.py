@@ -70,6 +70,7 @@ class Params:
     def __init__(self, **kwargs):
         # Shape of the image to be processed. The original with either be resized or pad depending on its original size
         self.input_shape = kwargs.get('input_shape', (32, 100))
+        self.input_channels = kwargs.get('input_channels', 1)
         # Either decode with the same alphabet or map capitals and lowercase letters to the same symbol (lowercase)
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
         self.gpu = kwargs.get('gpu', '')
