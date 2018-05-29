@@ -19,21 +19,31 @@ from tf_crnn.config import Params, TrainingParams
 ex = Experiment('CRNN_experiment')
 
 
+def distribution_gpus(num_gpus):
+    if num_gpus == 1:
+        return tf.contrib.distribute.OneDeviceStrategy(device='/gpu:0')
+    elif num_gpus > 1:
+        return tf.contrib.distribute.MirroredStrategy(num_gpus=num_gpus)
+    else:
+        return None
+
+
 @ex.config
 def default_config():
     csv_files_train = None
     csv_files_eval = None
     output_model_dir = None
-    gpu = ''
+    num_gpus = 1
     lookup_alphabet_file = ''
     input_shape = (32, 100)
+    num_beam_paths = 2
     training_params = TrainingParams().to_dict()
     restore_model = False
 
 
 @ex.automain
 def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir: str,
-        gpu: str, training_params: dict, _config):
+        training_params: dict, _config):
 
     # Save config
     if not os.path.isdir(output_model_dir):
@@ -54,7 +64,6 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         'TrainingParams': training_params
     }
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8
     config_sess.gpu_options.allow_growth = True
@@ -66,7 +75,8 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                        session_config=config_sess,
                        save_checkpoints_secs=None,
                        save_summary_steps=1000,
-                       model_dir=output_model_dir)
+                       model_dir=output_model_dir,
+                       train_distribute=distribution_gpus(parameters.num_gpus))
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,

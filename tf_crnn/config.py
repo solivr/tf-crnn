@@ -73,12 +73,13 @@ class Params:
         self.input_channels = kwargs.get('input_channels', 1)
         # Either decode with the same alphabet or map capitals and lowercase letters to the same symbol (lowercase)
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
-        self.gpu = kwargs.get('gpu', '')
+        self.num_gpus = kwargs.get('num_gpus', 1)
         self.lookup_alphabet_file = kwargs.get('lookup_alphabet_file')
         self.csv_files_train = kwargs.get('csv_files_train')
         self.csv_files_eval = kwargs.get('csv_files_eval')
         self.output_model_dir = kwargs.get('output_model_dir')
         self._keep_prob_dropout = kwargs.get('keep_prob')
+        self.num_beam_paths = kwargs.get('num_beam_paths', 2)
 
         self._assign_alphabet()
 

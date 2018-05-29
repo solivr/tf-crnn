@@ -322,30 +322,49 @@ def crnn_fn(features, labels, mode, params):
             table_int2str = tf.contrib.lookup.HashTable(
                 tf.contrib.lookup.KeyValueTensorInitializer(keys_alphabet_codes, values_alphabet_units), '?')
 
-            sparse_code_pred, log_probability = tf.nn.ctc_beam_search_decoder(
+            # Output is 2 list of length NUM_BEAM_PATHS with tensors of shape [Batch, ...]
+            sparse_code_pred, log_probability_ctc = tf.nn.ctc_beam_search_decoder(
                 predictions_dict['prob'],
                 sequence_length=tf.cast(seq_len_inputs, tf.int32),
                 merge_repeated=False,
                 beam_width=100,
-                top_paths=2)
-            # Score
-            predictions_dict['score'] = tf.subtract(log_probability[:, 0], log_probability[:, 1])
-            # around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
-            sparse_code_pred = sparse_code_pred[0]
+                top_paths=parameters.num_beam_paths)
 
-            sequence_lengths_pred = tf.bincount(tf.cast(sparse_code_pred.indices[:, 0], tf.int32),
+            sequence_lengths_pred = tf.bincount(tf.cast(sparse_code_pred[0].indices[:, 0], tf.int32),
                                                 minlength=tf.shape(predictions_dict['prob'])[1])
 
-            pred_chars = table_int2str.lookup(sparse_code_pred)
+            pred_chars = table_int2str.lookup(sparse_code_pred[0])
             predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths_pred)
 
             tf.summary.text('predicted_words', predictions_dict['words'][:10])
+
+    # Compute these values only when predicting, they're not useful during training/evaluation
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        # Possible paths
+        with tf.name_scope('get_best_paths_transcriptions'):
+            sequence_lengths_pred = [tf.bincount(tf.cast(sp.indices[:, 0], tf.int32),
+                                                 minlength=tf.shape(predictions_dict['prob'])[1])
+                                     for sp in sparse_code_pred]
+
+            pred_chars = [table_int2str.lookup(sp) for sp in sparse_code_pred]
+
+            predictions_dict['best_transcriptions'] = tf.stack(
+                [get_words_from_chars(char.values, sequence_lengths=length)
+                 for char, length in zip(pred_chars, sequence_lengths_pred)]
+            )
+
+        # Score : around 10.0 -> seems pretty sure, less than 5.0 bit unsure, some errors/challenging images
+        predictions_dict['score'] = tf.subtract(log_probability_ctc[:, 0], log_probability_ctc[:, 1],
+                                                name='score_computation')
+
+        # Logprobs ctc decoding :
+        predictions_dict['logprob_ctc'] = log_probability_ctc
 
     # Evaluation ops
     # --------------
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('evaluation'):
-            CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred, tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
+            CER = tf.metrics.mean(tf.edit_distance(sparse_code_pred[0], tf.cast(sparse_code_target, dtype=tf.int64)), name='CER')
 
             # Convert label codes to decoding alphabet to compare predicted and groundtrouth words
             target_chars = table_int2str.lookup(tf.cast(sparse_code_target, tf.int64))
