@@ -259,7 +259,7 @@ def crnn_fn(features, labels, mode, params):
         with tf.name_scope('str2code_conversion'):
             table_str2int = tf.contrib.lookup.HashTable(
                 tf.contrib.lookup.KeyValueTensorInitializer(keys_alphabet_units, values_alphabet_codes), -1)
-            labels_splited = tf.string_split(labels, delimiter='|')
+            labels_splited = tf.string_split(labels, delimiter=parameters.string_split_delimiter)
             codes = table_str2int.lookup(labels_splited.values)
             sparse_code_target = tf.SparseTensor(labels_splited.indices, codes, labels_splited.dense_shape)
 

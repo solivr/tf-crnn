@@ -94,4 +94,3 @@ def map_lookup(lookup_table: dict, unique_entry: bool=True)-> dict:
         # Todo
 
     return dict(mapped_lookup)
-

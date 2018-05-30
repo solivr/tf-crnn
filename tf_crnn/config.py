@@ -6,6 +6,9 @@ import os
 import json
 from .hlp.alphabet_helpers import load_lookup_from_json
 from glob import glob
+import string
+import csv
+from typing import List
 
 
 class CONST:
@@ -13,7 +16,16 @@ class CONST:
 
 
 class Alphabet:
+    """
+    Attributes:
+        blank_symbol : Blank symbol used for CTC
+        alphabet_units : list of elements composing the alphabet.
+                        The units may be a single character or multiple characters.
+        codes : list of int. Each alphabet unit has a unique code.
+        nclasses : number of alphabet units
+    """
     def __init__(self, lookup_alphabet_file: str=None, blank_symbol: str='$'):
+
         self._blank_symbol = blank_symbol
 
         if lookup_alphabet_file:
@@ -27,6 +39,34 @@ class Alphabet:
             self._alphabet_units = list(lookup_alphabet.keys())
             self._codes = list(lookup_alphabet.values())
             self._nclasses = max(self.codes) + 1  # n_classes should be + 1 of labels codes
+
+    def check_input_file_alphabet(self, csv_filenames: List[str],
+                                  discarded_chars: str=';|{}'.format(string.whitespace[1:])) -> None:
+        """
+        Checks if labels of input files contains only characters that are in the Alphabet
+        :param csv_filenames: list of the csv filename
+        :param discarded_chars: discarded characters
+        :return:
+        """
+        assert isinstance(csv_filenames, list), 'csv_filenames argument is not a list'
+
+        alphabet_set = set(self.alphabet_units)
+
+        for filename in csv_filenames:
+            input_chars_set = set()
+
+            with open(filename, 'r', encoding='utf8') as f:
+                csvreader = csv.reader(f, delimiter=';')
+                for line in csvreader:
+                    input_chars_set.update(line[1])
+
+            # Discard all whitespaces except space ' '
+            for whitespace in discarded_chars:
+                input_chars_set.discard(whitespace)
+
+            extra_chars = input_chars_set - alphabet_set
+            assert len(extra_chars) == 0, 'There are {} unknown chars in {} : {}'.format(len(extra_chars),
+                                                                                         filename, extra_chars)
 
     @property
     def n_classes(self):
@@ -46,6 +86,18 @@ class Alphabet:
 
 
 class TrainingParams:
+    """
+    Attributes :
+        n_epochs: numbers of epochs to run the training
+        train_batch_size : batch size suring training
+        eval_batch_size : batch size during evaluation
+        learning_rate : initial learning rate
+        learning_decay_rate : decay rate for exponential learning rate
+        learning_decay_steps : decay steps for exponential learning rate
+        evaluate_every_epoch : evaluate every 'evaluate_every_epoch' epoch
+        save_interval : save the model every 'save_interval' step
+        optimizer : which optimizer to use ('adam', 'rms', 'ada')
+    """
     def __init__(self, **kwargs):
         self.n_epochs = kwargs.get('n_epochs', 50)
         self.train_batch_size = kwargs.get('train_batch_size', 64)
@@ -67,12 +119,27 @@ class TrainingParams:
 
 
 class Params:
+    """
+    Attributes:
+        input_shape : input shape of the image to batch (this is the shape after data augmentation)
+        input_channels: number of color channels for input image
+        csv_delimiter : character to delimit csv input files
+        string_split_delimiter: character that delimits each alphabet unit in the labels
+        num_gpus : number of gpus to use
+        lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
+        csv_files_train : csv filename which contains the (path;label) of each training sample
+        csv_files_eval : csv filename which contains the (path;label) of each eval sample
+        output_model_dir : output directory where the model will be saved and exported
+        keep_prob_dropout: keep probability
+        num_beam_paths : number of paths (transcriptions) to return for ctc beam search (only used when predicting)
+    """
     def __init__(self, **kwargs):
         # Shape of the image to be processed. The original with either be resized or pad depending on its original size
         self.input_shape = kwargs.get('input_shape', (32, 100))
         self.input_channels = kwargs.get('input_channels', 1)
         # Either decode with the same alphabet or map capitals and lowercase letters to the same symbol (lowercase)
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
+        self.string_split_delimiter = kwargs.get('string_split_delimiter', '|')
         self.num_gpus = kwargs.get('num_gpus', 1)
         self.lookup_alphabet_file = kwargs.get('lookup_alphabet_file')
         self.csv_files_train = kwargs.get('csv_files_train')
