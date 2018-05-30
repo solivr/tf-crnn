@@ -8,12 +8,13 @@ from sacred import Experiment
 from tqdm import trange
 import tensorflow as tf
 from typing import List
+import string
 try:
     import better_exceptions
 except ImportError:
     pass
 from tf_crnn.model import crnn_fn
-from tf_crnn.data_handler import data_loader, preprocess_image_for_prediction
+from tf_crnn.data_handler import data_loader, preprocess_image_for_prediction, serving_single_input
 from tf_crnn.config import Params, TrainingParams
 
 ex = Experiment('CRNN_experiment')
@@ -64,6 +65,11 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         'TrainingParams': training_params
     }
 
+    # Check if alphabet contains all chars in csv input files
+    discarded_chars = parameters.string_split_delimiter+parameters.csv_delimiter+string.whitespace[1:]
+    parameters.alphabet.check_input_file_alphabet(parameters.csv_files_train + parameters.csv_files_eval,
+                                                  discarded_chars=discarded_chars)
+
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8
     config_sess.gpu_options.allow_growth = True
@@ -84,30 +90,24 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                                        config=est_config
                                        )
 
-    try:
-        for e in trange(0, training_params.n_epochs, training_params.evaluate_every_epoch):
+    for e in trange(0, training_params.n_epochs, training_params.evaluate_every_epoch):
 
-            estimator.train(input_fn=data_loader(csv_filename=csv_files_train,
-                                                 params=parameters,
-                                                 batch_size=training_params.train_batch_size,
-                                                 num_epochs=training_params.evaluate_every_epoch,
-                                                 data_augmentation=True,
-                                                 image_summaries=True))
+        estimator.train(input_fn=data_loader(csv_filename=csv_files_train,
+                                             params=parameters,
+                                             batch_size=training_params.train_batch_size,
+                                             num_epochs=training_params.evaluate_every_epoch,
+                                             data_augmentation=True,
+                                             image_summaries=True))
 
-            estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
-                                        serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
-
-            estimator.evaluate(input_fn=data_loader(csv_filename=csv_files_eval,
-                                                    params=parameters,
-                                                    batch_size=training_params.eval_batch_size,
-                                                    num_epochs=1))
-
-    except KeyboardInterrupt:
-        print('Interrupted')
         estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
-                                    preprocess_image_for_prediction(min_width=10))
-        print('Exported model to {}'.format(os.path.join(output_model_dir, 'export')))
+                                    serving_input_receiver_fn=serving_single_input(fixed_height=parameters.input_shape[0],
+                                                                                   min_width=10))
 
-    estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
-                                preprocess_image_for_prediction(min_width=10))
-    print('Exported model to {}'.format(os.path.join(output_model_dir, 'export')))
+        estimator.evaluate(input_fn=data_loader(csv_filename=csv_files_eval,
+                                                params=parameters,
+                                                batch_size=training_params.eval_batch_size,
+                                                num_epochs=1))
+
+    # estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
+    #                             serving_single_input(min_width=10))
+    # print('Exported model to {}'.format(os.path.join(output_model_dir, 'export')))

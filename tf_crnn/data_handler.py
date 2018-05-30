@@ -11,6 +11,7 @@ from typing import Tuple, Union, List
 def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # adapted from SeguinBe
     """
     Rotates an image with a random angle
+    see https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders for formulae
     :param img: Tensor
     :param max_rotation: maximum angle to rotate (radians)
     :param crop: boolean to crop or not the image after rotation
@@ -23,7 +24,6 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
             rotation = tf.abs(rotation)
             original_shape = tf.shape(rotated_image)[:2]
             h, w = original_shape[0], original_shape[1]
-            # see https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders for formulae
             old_l, old_s = tf.cond(h > w, lambda: [h, w], lambda: [w, h])
             old_l, old_s = tf.cast(old_l, tf.float32), tf.cast(old_s, tf.float32)
             new_l = (old_l * tf.cos(rotation) - old_s * tf.sin(rotation)) / tf.cos(2*rotation)
@@ -301,3 +301,46 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
         return prepared_batch, prepared_batch.get('labels')
 
     return input_fn
+
+
+def serving_single_input(fixed_height: int=32, min_width: int=8):
+
+    def serving_input_fn():
+
+        # define placeholder for filename
+        filename = tf.placeholder(dtype=tf.string)
+        decoded_image = tf.to_float(tf.image.decode_jpeg(tf.read_file(filename), channels=3,
+                                                         try_recover_truncated=True))
+
+        image = tf.image.rgb_to_grayscale(decoded_image, name='rgb2gray')
+        # define placeholder for input image
+        # image = tf.placeholder(dtype=tf.float32, shape=[None, None, 1])
+
+        shape = tf.shape(image)
+        # Assert shape is h x w x c with c = 1
+
+        ratio = tf.divide(shape[1], shape[0])
+        increment = CONST.DIMENSION_REDUCTION_W_POOLING
+        new_width = tf.cast(tf.round((ratio * fixed_height) / increment) * increment, tf.int32)
+
+        resized_image = tf.cond(new_width < tf.constant(min_width, dtype=tf.int32),
+                                true_fn=lambda: tf.image.resize_images(image, size=(fixed_height, min_width)),
+                                false_fn=lambda: tf.image.resize_images(image, size=(fixed_height, new_width))
+                                )
+
+        # Features to serve
+        features = {'images': resized_image[None],  # cast to 1 x h x w x c
+                    'images_widths': new_width[None]  # cast to tensor
+                    }
+
+        # Inputs received
+        receiver_inputs = {'images': image}
+        alternative_receivers = {'input_filename': {'filename': filename}, 'input_rgb': {'rgb_images': decoded_image}}
+
+        return tf.estimator.export.ServingInputReceiver(features, receiver_tensors=receiver_inputs,
+                                                        receiver_tensors_alternatives=alternative_receivers)
+
+    return serving_input_fn
+
+# TODO serving function for batches
+# TODO serving function from url...
