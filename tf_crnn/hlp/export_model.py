@@ -6,7 +6,7 @@ import os
 import tensorflow as tf
 import click
 from tf_crnn.model import crnn_fn
-from tf_crnn.data_handler import preprocess_image_for_prediction
+from tf_crnn.data_handler import serving_single_input
 from tf_crnn.config import Params, TrainingParams, import_params_from_json
 try:
     import better_exceptions
@@ -49,18 +49,5 @@ def export_model(model_directory: str, output_dir: str, gpu: str):
                                        )
 
     estimator.export_savedmodel(output_dir,
-                                serving_input_receiver_fn=preprocess_image_for_prediction(min_width=10))
-
-
-#
-# def _signature_def_to_tensors(signature_def):
-#     g = tf.get_default_graph()
-#     return {k: g.get_tensor_by_name(v.name) for k,v in signature_def.inputs.items()}, \
-#            {k: g.get_tensor_by_name(v.name) for k,v in signature_def.outputs.items()}
-#
-# with tf.Session(graph=tf.Graph()) as sess:
-#     loaded_model = tf.saved_model.loader.load(sess, ["serve"], './exported_models/1499264748/')
-#     input_dict, output_dict =_signature_def_to_tensors(loaded_model.signature_def['predictions'])
-#     out = sess.run(output_dict, feed_dict={input_dict['images']: img_test[:,:,None]})
-
-# to see all : saved_model_cli show --dir . --all
+                                serving_input_receiver_fn=serving_single_input(
+                                    fixed_height=parameters.input_shape[0], min_width=10))

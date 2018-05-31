@@ -4,6 +4,7 @@ __license__ = "GPL"
 
 import tensorflow as tf
 import numpy as np
+import csv
 from .config import Params, CONST
 from typing import Tuple, Union, List
 
@@ -177,41 +178,41 @@ def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increm
     return pad_image, new_w  # new_w = image width used for computing sequence lengths
 
 
-def preprocess_image_for_prediction(fixed_height: int=32, min_width: int=8):
-    """
-    Input function to use when exporting the model for making predictions (see estimator.export_savedmodel)
-    :param fixed_height: height of the input image after resizing
-    :param min_width: minimum width of image after resizing
-    :return:
-    """
-
-    def serving_input_fn():
-        # define placeholder for input image
-        image = tf.placeholder(dtype=tf.float32, shape=[None, None, 1])
-
-        shape = tf.shape(image)
-        # Assert shape is h x w x c with c = 1
-
-        ratio = tf.divide(shape[1], shape[0])
-        increment = CONST.DIMENSION_REDUCTION_W_POOLING
-        new_width = tf.cast(tf.round((ratio * fixed_height) / increment) * increment, tf.int32)
-
-        resized_image = tf.cond(new_width < tf.constant(min_width, dtype=tf.int32),
-                                true_fn=lambda: tf.image.resize_images(image, size=(fixed_height, min_width)),
-                                false_fn=lambda: tf.image.resize_images(image, size=(fixed_height, new_width))
-                                )
-
-        # Features to serve
-        features = {'images': resized_image[None],  # cast to 1 x h x w x c
-                    'images_widths': new_width[None]  # cast to tensor
-                    }
-
-        # Inputs received
-        receiver_inputs = {'images': image}
-
-        return tf.estimator.export.ServingInputReceiver(features, receiver_inputs)
-
-    return serving_input_fn
+# def preprocess_image_for_prediction(fixed_height: int=32, min_width: int=8):
+#     """
+#     Input function to use when exporting the model for making predictions (see estimator.export_savedmodel)
+#     :param fixed_height: height of the input image after resizing
+#     :param min_width: minimum width of image after resizing
+#     :return:
+#     """
+#
+#     def serving_input_fn():
+#         # define placeholder for input image
+#         image = tf.placeholder(dtype=tf.float32, shape=[None, None, 1])
+#
+#         shape = tf.shape(image)
+#         # Assert shape is h x w x c with c = 1
+#
+#         ratio = tf.divide(shape[1], shape[0])
+#         increment = CONST.DIMENSION_REDUCTION_W_POOLING
+#         new_width = tf.cast(tf.round((ratio * fixed_height) / increment) * increment, tf.int32)
+#
+#         resized_image = tf.cond(new_width < tf.constant(min_width, dtype=tf.int32),
+#                                 true_fn=lambda: tf.image.resize_images(image, size=(fixed_height, min_width)),
+#                                 false_fn=lambda: tf.image.resize_images(image, size=(fixed_height, new_width))
+#                                 )
+#
+#         # Features to serve
+#         features = {'images': resized_image[None],  # cast to 1 x h x w x c
+#                     'images_widths': new_width[None]  # cast to tensor
+#                     }
+#
+#         # Inputs received
+#         receiver_inputs = {'images': image}
+#
+#         return tf.estimator.export.ServingInputReceiver(features, receiver_inputs)
+#
+#     return serving_input_fn
 
 
 def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True, batch_size: int=64,
@@ -237,8 +238,8 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
     padding = True
 
     def input_fn():
+        dataset = tf.data.TextLineDataset(csv_filename)
         with tf.name_scope('CSV_reading'):
-            dataset = tf.data.TextLineDataset(csv_filename)
 
             # -- Parse each line.
             def _parse_csv_line(line):
@@ -342,5 +343,71 @@ def serving_single_input(fixed_height: int=32, min_width: int=8):
 
     return serving_input_fn
 
+
 # TODO serving function for batches
+def serving_batch_filenames_fn(input_shape=(32, 100), n_channels: int=1, padding=True):
+    """
+    Serving input function for batch inference using filenames as inputs
+    :param input_shape: shape of the input after resizing/padding
+    :param n_channels: number of channels of images
+    :param padding: if True, keeps the image ratio and pads it to get to 'input_shape' shape,
+                    if False will resize the image using bilinear interpolation
+    :param batch_size: batch_size for inference
+    :return: serving input function
+    """
+
+    def serving_input_fn():
+
+        # Define placeholder for batch size and filename
+        batch_size = tf.placeholder(dtype=tf.int64, name='batch_size')
+        image_filenames = tf.placeholder(dtype=tf.string, shape=[None],name='list_image_filenames')
+
+        # Create dataset
+        dataset = tf.data.Dataset.from_tensor_slices(image_filenames)
+
+        # -- Read image
+        def _image_reading_preprocessing(image_filename) -> dict():
+
+            # Load
+            image_content = tf.read_file(image_filename, name='filename_reader')
+            # Decode image is not used because it seems the shape is not set...
+            # image = tf.image.decode_jpeg(image_content, channels=params.input_channels,
+            #                              try_recover_truncated=True,name='image_decoding_op')
+            # tensorflow v1.8 change to :
+            image = tf.cond(
+                tf.image.is_jpeg(image_content),
+                lambda: tf.image.decode_jpeg(image_content, channels=n_channels, name='image_decoding_op',
+                                             try_recover_truncated=True),
+                lambda: tf.image.decode_png(image_content, channels=n_channels, name='image_decoding_op'))
+
+            # Padding
+            if padding:
+                with tf.name_scope('padding'):
+                    image, img_width = padding_inputs_width(image, target_shape=input_shape,
+                                                            increment=CONST.DIMENSION_REDUCTION_W_POOLING)
+            # Resize
+            else:
+                image = tf.image.resize_images(image, size=input_shape)
+                img_width = tf.shape(image)[1]
+
+            return image, img_width
+        dataset = dataset.map(_image_reading_preprocessing)
+
+        dataset = dataset.batch(batch_size)
+
+        # Build the Iterator this way in order to be able to initialize it when the saved_model will be loaded
+        # From http://vict0rsch.github.io/2018/05/17/restore-tf-model-dataset/
+        iterator = tf.data.Iterator.from_structure(dataset.output_types, dataset.output_shapes)
+        dataset_init_op = iterator.make_initializer(dataset, name='dataset_init')
+        features_images, features_widths = iterator.get_next()
+
+        # Features to serve 'images', images_width'
+        features = {'images': features_images, 'images_widths': features_widths}
+
+        return tf.estimator.export.ServingInputReceiver(features, receiver_tensors={'list_filenames': image_filenames,
+                                                                                    'batch_size': batch_size})
+
+    return serving_input_fn
+
+
 # TODO serving function from url...
