@@ -243,7 +243,7 @@ def crnn_fn(features, labels, mode, params):
     seq_len_inputs = tf.divide(features['images_widths'], n_pools, name='seq_len_input_op') - 1
 
     predictions_dict = {'prob': logprob,
-                        'raw_predictions': raw_pred,
+                        # 'raw_predictions': raw_pred,
                         }
     try:
         predictions_dict['filenames'] = features['filenames']
@@ -335,6 +335,9 @@ def crnn_fn(features, labels, mode, params):
 
             pred_chars = table_int2str.lookup(sparse_code_pred[0])
             predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths_pred)
+            predictions_dict['codes'] = tf.sparse_to_dense(sparse_indices=sparse_code_pred[0].indices,
+                                                           output_shape=sparse_code_pred[0].dense_shape,
+                                                           sparse_values=sparse_code_pred[0].values)
 
             tf.summary.text('predicted_words', predictions_dict['words'][:10])
 
