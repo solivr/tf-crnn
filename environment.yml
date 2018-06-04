@@ -1,0 +1,15 @@
+name: tf_crnn
+channels:
+  - defaults
+dependencies:
+  - imageio=2.3.0=py35_0
+  - opencv=3.4.1=py35h6fd60c2_1
+  - python=3.5.5=hc3d631a_4
+  - tensorboard=1.7.0=py35hf484d3e_1
+  - tensorflow-gpu=1.7.0=0
+  - tqdm=4.23.3=py35_0
+  - pip:
+    - better-exceptions==0.2.1
+    - sacred==0.7.3
+prefix: /home/user/anaconda3/envs/tf_crnn
+
