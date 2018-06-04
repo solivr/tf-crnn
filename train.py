@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 from tf_crnn.model import crnn_fn
-from tf_crnn.data_handler import data_loader, preprocess_image_for_prediction, serving_single_input
+from tf_crnn.data_handler import data_loader, serving_single_input, serving_batch_filenames_fn
 from tf_crnn.config import Params, TrainingParams
 
 ex = Experiment('CRNN_experiment')
@@ -100,14 +100,10 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                                              image_summaries=True))
 
         estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
-                                    serving_input_receiver_fn=serving_single_input(fixed_height=parameters.input_shape[0],
-                                                                                   min_width=10))
+                                    serving_input_receiver_fn=serving_single_input(
+                                        fixed_height=parameters.input_shape[0], min_width=10))
 
         estimator.evaluate(input_fn=data_loader(csv_filename=csv_files_eval,
                                                 params=parameters,
                                                 batch_size=training_params.eval_batch_size,
                                                 num_epochs=1))
-
-    # estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
-    #                             serving_single_input(min_width=10))
-    # print('Exported model to {}'.format(os.path.join(output_model_dir, 'export')))

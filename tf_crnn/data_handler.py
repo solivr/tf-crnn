@@ -290,7 +290,7 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
         dataset = dataset.map(_image_reading_preprocessing)
 
         # -- Shuffle, repeat, and batch features
-        dataset = dataset.shuffle(5000).batch(batch_size).repeat(num_epochs).prefetch(4)
+        dataset = dataset.shuffle(2048).batch(batch_size).repeat(num_epochs).prefetch(4)
         dataset_iterator = dataset.make_one_shot_iterator()
         prepared_batch = dataset_iterator.get_next()
 
@@ -360,7 +360,7 @@ def serving_batch_filenames_fn(input_shape=(32, 100), n_channels: int=1, padding
 
         # Define placeholder for batch size and filename
         batch_size = tf.placeholder(dtype=tf.int64, name='batch_size')
-        image_filenames = tf.placeholder(dtype=tf.string, shape=[None],name='list_image_filenames')
+        image_filenames = tf.placeholder(dtype=tf.string, shape=[None], name='list_image_filenames')
 
         # Create dataset
         dataset = tf.data.Dataset.from_tensor_slices(image_filenames)

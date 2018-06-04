@@ -5,13 +5,13 @@
     "learning_decay_steps" : 5000,
     "save_interval" : 1e3,
     "n_epochs" : 50,
-    "train_batch_size" : 32,
+    "train_batch_size" : 64,
     "eval_batch_size" : 64
   },
   "input_shape" : [32, 304],
+  "num_beam_paths" : 5,
   "lookup_alphabet_file" : "./tf_crnn/data/lookup_letters_digits_symbols_abbrev.json",
   "csv_files_train" : ["/mnt/cluster-nas/sofia/DT_handwrittings/vtm_data/mixed_numbers_letters_abbrev/mixed_numbers_letters_abbrev_abspath_tfformat_train.csv"],
   "csv_files_eval" : ["/mnt/cluster-nas/sofia/DT_handwrittings/vtm_data/mixed_numbers_letters_abbrev/mixed_numbers_letters_abbrev_abspath_tfformat_eval.csv"],
-  "output_model_dir" : "/mnt/cluster-nas/sofia/tf_tmp_models/crnn",
-  "gpu" : "0"
+  "output_model_dir" : "/mnt/cluster-nas/sofia/tf_tmp_models/crnn"
 }

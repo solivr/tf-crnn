@@ -43,7 +43,7 @@ class PredictionModel:
             raise NotImplementedError
 
         assert input_dict_key in self._input_dict.keys(), \
-            'There is no {} key in input dictionnary. Try {}'.format(input_dict_key, self._input_dict.keys())
+            'There is no "{}" key in input dictionnary. Try "{}"'.format(input_dict_key, self._input_dict.keys())
 
         self._input_tensor = self._input_dict[input_dict_key]
 
@@ -75,8 +75,6 @@ class PredictionModelBatch:
 
         # assert input_dict_key in self._input_dict.keys(), \
         #     'There is no {} key in input dictionnary. Try {}'.format(input_dict_key, self._input_dict.keys())
-
-
 
         # Get init op for dataset
         g = tf.get_default_graph()
