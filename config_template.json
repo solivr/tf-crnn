@@ -1,0 +1,18 @@
+{
+  "training_params" : {
+    "learning_rate" : 1e-3,
+    "learning_decay_rate" : 0.95,
+    "learning_decay_steps" : 5000,
+    "save_interval" : 1e3,
+    "n_epochs" : 50,
+    "train_batch_size" : 128,
+    "eval_batch_size" : 128
+  },
+  "input_shape" : [32, 304],
+  "string_split_delimiter" : "|",
+  "csv_delimiter" : ";",
+  "lookup_alphabet_file" : "./tf_crnn/data/lookup_letters_digits_symbols.json",
+  "csv_files_train" : ["./my_train_data.csv"],
+  "csv_files_eval" : ["./my_eval_data.csv"],
+  "output_model_dir" : "/.output/"
+}
