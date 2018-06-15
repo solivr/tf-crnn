@@ -68,6 +68,11 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         'TrainingParams': training_params
     }
 
+    # Create export directory
+    export_dir = os.path.join(output_model_dir, 'export')
+    if not os.path.isdir(export_dir):
+        os.makedirs(export_dir)
+
     # Check if alphabet contains all chars in csv input files
     discarded_chars = parameters.string_split_delimiter+parameters.csv_delimiter+string.whitespace[1:]
     parameters.alphabet.check_input_file_alphabet(parameters.csv_files_train + parameters.csv_files_eval,
@@ -102,7 +107,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                                              data_augmentation=True,
                                              image_summaries=True))
 
-        estimator.export_savedmodel(os.path.join(output_model_dir, 'export'),
+        estimator.export_savedmodel(export_dir,
                                     serving_input_receiver_fn=serving_single_input(
                                         fixed_height=parameters.input_shape[0], min_width=10))
 
