@@ -63,6 +63,7 @@ All dependencies should be installed if you run `python setup.py install` or use
 * `json`
 
 ## Running with docker
+(thanks to @PonteIneptique)
 
 The `Dockerfile` in the root directory allows you to run the whole program as a Docker Nvidia Tensorflow GPU container. This is potentially helpful
 to deal with external dependencies like CUDA and the likes.
