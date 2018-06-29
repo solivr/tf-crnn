@@ -75,8 +75,10 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
 
     # Check if alphabet contains all chars in csv input files
     discarded_chars = parameters.string_split_delimiter+parameters.csv_delimiter+string.whitespace[1:]
-    parameters.alphabet.check_input_file_alphabet(parameters.csv_files_train + parameters.csv_files_eval,
-                                                  discarded_chars=discarded_chars)
+    parameters.alphabet.check_input_file_alphabet(
+        parameters.csv_files_train + parameters.csv_files_eval,
+        discarded_chars=discarded_chars,
+        csv_delimiter=parameters.csv_delimiter)
 
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8

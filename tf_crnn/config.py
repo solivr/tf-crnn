@@ -41,7 +41,8 @@ class Alphabet:
             self._nclasses = max(self.codes) + 1  # n_classes should be + 1 of labels codes
 
     def check_input_file_alphabet(self, csv_filenames: List[str],
-                                  discarded_chars: str=';|{}'.format(string.whitespace[1:])) -> None:
+                                  discarded_chars: str=';|{}'.format(string.whitespace[1:]),
+                                  csv_delimiter: str=";") -> None:
         """
         Checks if labels of input files contains only characters that are in the Alphabet
         :param csv_filenames: list of the csv filename
@@ -56,7 +57,7 @@ class Alphabet:
             input_chars_set = set()
 
             with open(filename, 'r', encoding='utf8') as f:
-                csvreader = csv.reader(f, delimiter=';')
+                csvreader = csv.reader(f, delimiter=csv_delimiter)
                 for line in csvreader:
                     input_chars_set.update(line[1])
 
