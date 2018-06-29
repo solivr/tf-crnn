@@ -62,3 +62,39 @@ All dependencies should be installed if you run `python setup.py install` or use
 * `tqdm` for progress bars
 * `json`
 
+## Running with docker
+
+The `Dockerfile` in the root directory allows you to run the whole program as a Docker Nvidia Tensorflow GPU container. This is potentially helpful
+to deal with external dependencies like CUDA and the likes.
+
+You can follow installations processes here : 
+- docker-ce : [Ubuntu](https://docs.docker.com/install/linux/docker-ce/ubuntu/#os-requirements)
+- nvidia-docker : [Ubuntu](https://nvidia.github.io/nvidia-docker/)
+
+Once this is installed, we will need to build the image of the container by doing :
+
+```bash
+nvidia-docker build . --tag tf-crnn
+```
+
+Our container model is now named `tf-crnn`. We will be able to run it from `nvidia-docker run -it tf-crnn:latest bash` which will open a bash directory exactly where you are. Although, we recommend using 
+
+```bash
+nvidia-docker run -it -v /absolute/path/to/here/config:./config -v $INPUT_DATA:/sources  tf-crnn:latest bash
+```
+where `$INPUT_DATA` should be replaced by the directory where you have your training and testing data. This will get mounted on the `sources` folder. We propose to mount by default `./config` to the current `./config` directory. Path need to be absolute path. We also recommend to change 
+
+```javascript
+  //...
+  "output_model_dir" : "/.output/"
+```
+
+to 
+
+```javascript
+  //...
+  "output_model_dir" : "/config/output"
+```
+
+- **Do not forget** to rename your training and testing file path, as well as renaming the path to their image by `/sources/.../file{.png,.jpg}`
+- **Note :** if you are uncortable with bash, you can always replace bash by `ipython3 notebook`
