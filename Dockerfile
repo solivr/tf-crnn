@@ -23,3 +23,8 @@ RUN python3 setup.py install
 # You should normalize the filepath in your data 
 VOLUME /sources
 VOLUME /config
+
+# TensorBoard
+EXPOSE 6006
+# Allowing tensorflow to run and be read
+EXPOSE 8888

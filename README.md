@@ -80,7 +80,7 @@ nvidia-docker build . --tag tf-crnn
 Our container model is now named `tf-crnn`. We will be able to run it from `nvidia-docker run -it tf-crnn:latest bash` which will open a bash directory exactly where you are. Although, we recommend using 
 
 ```bash
-nvidia-docker run -it -v /absolute/path/to/here/config:./config -v $INPUT_DATA:/sources  tf-crnn:latest bash
+nvidia-docker run -it -p 8888:8888 -p 6006:6006 -v /absolute/path/to/here/config:./config -v $INPUT_DATA:/sources  tf-crnn:latest bash
 ```
 where `$INPUT_DATA` should be replaced by the directory where you have your training and testing data. This will get mounted on the `sources` folder. We propose to mount by default `./config` to the current `./config` directory. Path need to be absolute path. We also recommend to change 
 
@@ -97,4 +97,4 @@ to
 ```
 
 - **Do not forget** to rename your training and testing file path, as well as renaming the path to their image by `/sources/.../file{.png,.jpg}`
-- **Note :** if you are uncortable with bash, you can always replace bash by `ipython3 notebook`
+- **Note :** if you are uncortable with bash, you can always replace bash by `ipython3 notebook --allow-root` and go to your browser on http://localhost:8888/ . A token will be shown in the terminal
