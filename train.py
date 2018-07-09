@@ -4,6 +4,7 @@ __license__ = "GPL"
 
 import os
 import json
+from distutils.version import LooseVersion
 from sacred import Experiment
 from tqdm import trange
 import tensorflow as tf
@@ -22,7 +23,7 @@ ex = Experiment('CRNN_experiment')
 
 def distribution_gpus(num_gpus):
     if num_gpus == 1:
-        return tf.contrib.distribute.OneDeviceStrategy(device='/gpu:0')
+        return tf.contrib.distribute.OneDeviceStrategy(device=tf.DeviceSpec(device_type="GPU", device_index=0))
     elif num_gpus > 1:
         return tf.contrib.distribute.MirroredStrategy(num_gpus=num_gpus)
     else:
@@ -86,13 +87,21 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
 
     # Config estimator
     est_config = tf.estimator.RunConfig()
-    est_config.replace(keep_checkpoint_max=10,
-                       save_checkpoints_steps=training_params.save_interval,
-                       session_config=config_sess,
-                       save_checkpoints_secs=None,
-                       save_summary_steps=1000,
-                       model_dir=output_model_dir,
-                       train_distribute=distribution_gpus(parameters.num_gpus))
+    if LooseVersion(tf.__version__) < LooseVersion('1.8'):
+        est_config.replace(keep_checkpoint_max=10,
+                           save_checkpoints_steps=training_params.save_interval,
+                           session_config=config_sess,
+                           save_checkpoints_secs=None,
+                           save_summary_steps=1000,
+                           model_dir=output_model_dir)
+    else:
+        est_config.replace(keep_checkpoint_max=10,
+                           save_checkpoints_steps=training_params.save_interval,
+                           session_config=config_sess,
+                           save_checkpoints_secs=None,
+                           save_summary_steps=1000,
+                           model_dir=output_model_dir,
+                           train_distribute=distribution_gpus(parameters.num_gpus))
 
     estimator = tf.estimator.Estimator(model_fn=crnn_fn,
                                        params=model_params,
