@@ -67,10 +67,11 @@ def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.
     return tf.pad(image, paddings, mode='REFLECT', name='random_padding')
 
 
-def augment_data(image: tf.Tensor) -> tf.Tensor:
+def augment_data(image: tf.Tensor, max_rotation: float=0.1) -> tf.Tensor:
     """
     Data augmentation on an image (padding, brightness, contrast, rotation)
     :param image: Tensor
+    :param max_rotation: float, maximum permitted rotation (in radians)
     :return: Tensor
     """
     with tf.name_scope('DataAugmentation'):
@@ -81,7 +82,7 @@ def augment_data(image: tf.Tensor) -> tf.Tensor:
         # TODO : add random scaling
         image = tf.image.random_brightness(image, max_delta=0.1)
         image = tf.image.random_contrast(image, 0.5, 1.5)
-        image = random_rotation(image, 0.05, crop=True)
+        image = random_rotation(image, max_rotation, crop=True)
 
         if image.shape[-1] >= 3:
             image = tf.image.random_hue(image, 0.2)
@@ -257,7 +258,7 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
 
             # Data augmentation
             if data_augmentation:
-                image = augment_data(image)
+                image = augment_data(image, params.data_augmentation_max_rotation)
 
             # Padding
             if padding:
@@ -275,11 +276,9 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
 
             return features
 
-        dataset = dataset.map(_image_reading_preprocessing, num_parallel_calls=22)
-        dataset = dataset.batch(batch_size).prefetch(32)
+        dataset = dataset.map(_image_reading_preprocessing, num_parallel_calls=params.input_data_n_parallel_calls)
 
-        # -- Shuffle, repeat, and batch features
-        # dataset = dataset.shuffle(2048).batch(batch_size).repeat(num_epochs).prefetch(4)
+        dataset = dataset.batch(batch_size).prefetch(32)
         prepared_batch = dataset.make_one_shot_iterator().get_next()
 
         if image_summaries:

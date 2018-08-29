@@ -43,7 +43,9 @@ def default_config():
     restore_model = False
     csv_delimiter = ';'
     string_split_delimiter = '|'
-    
+    data_augmentation = True
+    data_augmentation_max_rotation = 0.05
+    input_data_n_parallel_calls = 4
 
 
 @ex.automain
@@ -75,7 +77,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         os.makedirs(export_dir)
 
     # Check if alphabet contains all chars in csv input files
-    discarded_chars = parameters.string_split_delimiter+parameters.csv_delimiter+string.whitespace[1:]
+    discarded_chars = parameters.string_split_delimiter + parameters.csv_delimiter + string.whitespace[1:]
     parameters.alphabet.check_input_file_alphabet(
         parameters.csv_files_train + parameters.csv_files_eval,
         discarded_chars=discarded_chars,
@@ -83,7 +85,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
 
     config_sess = tf.ConfigProto()
     config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8
-    config_sess.gpu_options.allow_growth = True
+    # config_sess.gpu_options.allow_growth = True
 
     # Config estimator
     est_config = tf.estimator.RunConfig()
@@ -115,7 +117,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
                                              params=parameters,
                                              batch_size=training_params.train_batch_size,
                                              num_epochs=training_params.evaluate_every_epoch,
-                                             data_augmentation=True,
+                                             data_augmentation=parameters.data_augmentation,
                                              image_summaries=True))
 
         estimator.export_savedmodel(export_dir,

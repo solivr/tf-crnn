@@ -169,6 +169,9 @@ class Params:
         output_model_dir : output directory where the model will be saved and exported
         keep_prob_dropout: keep probability
         num_beam_paths : number of paths (transcriptions) to return for ctc beam search (only used when predicting)
+        data_augmentation: boolean if True augments data on the fly
+        data_augmentation_max_rotation : float, max permitted roation to apply to image during training (radians)
+        input_data_n_parallel_calls : int, number of parallel calls to make when using Dataset.map()
     """
     def __init__(self, **kwargs):
         # Shape of the image to be processed. The original with either be resized or pad depending on its original size
@@ -184,6 +187,9 @@ class Params:
         self.output_model_dir = kwargs.get('output_model_dir')
         self._keep_prob_dropout = kwargs.get('keep_prob')
         self.num_beam_paths = kwargs.get('num_beam_paths', 3)
+        self.data_augmentation = kwargs.get('data_augmentation', True),
+        self.data_augmentation_max_rotation = kwargs.get('data_augmentation_max_rotation', 0.05)
+        self.input_data_n_parallel_calls = kwargs.get('input_data_n_parallel_calls', 4)
 
         self._assign_alphabet()
 

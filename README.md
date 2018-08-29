@@ -56,11 +56,13 @@ python train.py with config_template.json
 
 ## Dependencies 
 All dependencies should be installed if you run `python setup.py install` or use the `environment.yml` file.
-* `tensorflow` >= 1.3
+* `tensorflow` >= 1.9
 * `sacred`
-* `tensorflow-tensorboard` >= 0.1.7 (not mandatory but useful to visualise loss, accuracy and inputs / outputs)
+* `tensorflow-tensorboard` (not mandatory but useful to visualise loss, accuracy and inputs / outputs)
 * `tqdm` for progress bars
 * `json`
+* `pandas`
+* OpenCV
 
 ## Running with docker
 (thanks to @PonteIneptique)

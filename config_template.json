@@ -11,6 +11,8 @@
   "input_shape" : [32, 304],
   "string_split_delimiter" : "|",
   "csv_delimiter" : ";",
+  "data_augmentation_max_rotation" : 0.1,
+  "input_data_n_parallel_calls" : 4,
   "lookup_alphabet_file" : "./tf_crnn/data/lookup_letters_digits_symbols.json",
   "csv_files_train" : ["./my_train_data.csv"],
   "csv_files_eval" : ["./my_eval_data.csv"],

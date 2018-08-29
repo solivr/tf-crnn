@@ -233,16 +233,15 @@ def crnn_fn(features, labels, mode, params):
         parameters.keep_prob_dropout = 0.7
     else:
         parameters.keep_prob_dropout = 1.0
-
     conv = deep_cnn(features['images'], input_channels=parameters.input_channels,
                     is_training=(mode == tf.estimator.ModeKeys.TRAIN), summaries=False)
-    logprob, raw_pred = deep_bidirectional_lstm(conv, params=parameters, summaries=False)
+    net_output, raw_pred = deep_bidirectional_lstm(conv, params=parameters, summaries=False)
 
     # Compute seq_len from image width
     n_pools = CONST.DIMENSION_REDUCTION_W_POOLING  # 2x2 pooling in dimension W on layer 1 and 2
     seq_len_inputs = tf.divide(features['images_widths'], n_pools, name='seq_len_input_op') - 1
 
-    predictions_dict = {'prob': logprob,
+    predictions_dict = {'probs': tf.nn.softmax(net_output),
                         # 'raw_predictions': raw_pred,
                         }
     try:
@@ -263,8 +262,8 @@ def crnn_fn(features, labels, mode, params):
             codes = table_str2int.lookup(labels_splited.values)
             sparse_code_target = tf.SparseTensor(labels_splited.indices, codes, labels_splited.dense_shape)
 
-        seq_lengths_labels = tf.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
-                                         minlength=tf.shape(predictions_dict['prob'])[1])
+            seq_lengths_labels = tf.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
+                                             minlength=tf.shape(net_output)[1])
 
         # Loss
         # ----
@@ -272,7 +271,7 @@ def crnn_fn(features, labels, mode, params):
         with tf.control_dependencies([tf.less_equal(sparse_code_target.dense_shape[1],
                                                     tf.reduce_max(tf.cast(seq_len_inputs, tf.int64)))]):
             loss_ctc = tf.nn.ctc_loss(labels=sparse_code_target,
-                                      inputs=predictions_dict['prob'],
+                                      inputs=net_output,
                                       sequence_length=tf.cast(seq_len_inputs, tf.int32),
                                       preprocess_collapse_repeated=False,
                                       ctc_merge_repeated=True,
@@ -324,14 +323,14 @@ def crnn_fn(features, labels, mode, params):
 
             # Output is 2 list of length NUM_BEAM_PATHS with tensors of shape [Batch, ...]
             sparse_code_pred, log_probability_ctc = tf.nn.ctc_beam_search_decoder(
-                predictions_dict['prob'],
+                net_output,
                 sequence_length=tf.cast(seq_len_inputs, tf.int32),
                 merge_repeated=False,
                 beam_width=100,
                 top_paths=parameters.num_beam_paths)
 
             sequence_lengths_pred = tf.bincount(tf.cast(sparse_code_pred[0].indices[:, 0], tf.int32),
-                                                minlength=tf.shape(predictions_dict['prob'])[1])
+                                                minlength=tf.shape(net_output)[1])
 
             pred_chars = table_int2str.lookup(sparse_code_pred[0])
             predictions_dict['words'] = get_words_from_chars(pred_chars.values, sequence_lengths=sequence_lengths_pred)
@@ -346,7 +345,7 @@ def crnn_fn(features, labels, mode, params):
         # Possible paths
         with tf.name_scope('get_best_paths_transcriptions'):
             sequence_lengths_pred = [tf.bincount(tf.cast(sp.indices[:, 0], tf.int32),
-                                                 minlength=tf.shape(predictions_dict['prob'])[1])
+                                                 minlength=tf.shape(net_output)[1])
                                      for sp in sparse_code_pred]
 
             pred_chars = [table_int2str.lookup(sp) for sp in sparse_code_pred]
