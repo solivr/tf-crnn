@@ -229,12 +229,7 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
     :return: data_loader function
     """
 
-    if labels:
-        csv_types = [['None'], ['None']]
-        csv_column_names = ['filenames', 'labels']
-    else:
-        csv_types = [['None']]
-        csv_column_names = ['filenames']
+    # TODO set num_parallel_calls as a config params
     padding = True
 
     def input_fn():
@@ -243,6 +238,13 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
 
             # -- Parse each line.
             def _parse_csv_line(line):
+                if labels:
+                    csv_types = [['None'], ['None']]
+                    csv_column_names = ['filenames', 'labels']
+                else:
+                    csv_types = [['None']]
+                    csv_column_names = ['filenames']
+
                 # Decode the line into its fields
                 fields = tf.decode_csv(line, record_defaults=csv_types,
                                        field_delim=params.csv_delimiter, name='csv_reading_op')
@@ -251,7 +253,9 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
 
                 return features
 
-            dataset = dataset.map(_parse_csv_line)
+            dataset = dataset.map(_parse_csv_line, num_parallel_calls=22)
+
+        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1024, count=num_epochs))
 
         # -- Read image
         def _image_reading_preprocessing(features: dict) -> dict():
@@ -287,12 +291,12 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
 
             return features
 
-        dataset = dataset.map(_image_reading_preprocessing)
+        dataset = dataset.map(_image_reading_preprocessing, num_parallel_calls=22)
+        dataset = dataset.batch(batch_size).prefetch(32)
 
         # -- Shuffle, repeat, and batch features
-        dataset = dataset.shuffle(2048).batch(batch_size).repeat(num_epochs).prefetch(4)
-        dataset_iterator = dataset.make_one_shot_iterator()
-        prepared_batch = dataset_iterator.get_next()
+        # dataset = dataset.shuffle(2048).batch(batch_size).repeat(num_epochs).prefetch(4)
+        prepared_batch = dataset.make_one_shot_iterator().get_next()
 
         if image_summaries:
             tf.summary.image('input/image', prepared_batch['images'], max_outputs=1)
