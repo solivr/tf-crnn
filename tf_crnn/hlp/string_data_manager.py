@@ -119,3 +119,18 @@ def lower_abbreviation_in_string(string_to_format: str):
         return final_string
     else:
         return ''
+
+
+def add_abbreviation_brackets(label: str):
+    """
+    Adds brackets in formatted strings i.e label= '|B|e|n|e|t|t|a| |M|a|z|z|o|l|e|n|i| |quondam| |A|n|z|o|l|o|'
+    turns to '|B|e|n|e|t|t|a| |M|a|z|z|o|l|e|n|i| |[quondam]| |A|n|z|o|l|o|'
+    :param label:
+    :return:
+    """
+    splits = label.split('|')
+
+    is_abbrev = [len(tok) > 1 for tok in splits]
+    bracketing = ['[' + tok + ']' if abbrev else tok for (tok, abbrev) in zip(splits, is_abbrev)]
+
+    return '|'.join(bracketing)
