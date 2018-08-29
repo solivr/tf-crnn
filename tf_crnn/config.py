@@ -4,10 +4,11 @@ __license__ = "GPL"
 
 import os
 import json
-from .hlp.alphabet_helpers import load_lookup_from_json
+from .hlp.alphabet_helpers import load_lookup_from_json, map_lookup
 from glob import glob
 import string
 import csv
+import pandas as pd
 from typing import List
 
 
@@ -68,6 +69,41 @@ class Alphabet:
             extra_chars = input_chars_set - alphabet_set
             assert len(extra_chars) == 0, 'There are {} unknown chars in {} : {}'.format(len(extra_chars),
                                                                                          filename, extra_chars)
+
+    @classmethod
+    def create_lookup_from_labels(cls, csv_files: List[str], export_lookup_filename: str,
+                                  original_lookup_filename: str=None):
+        """
+        Create a lookup dictionary for csv files containing labels.
+        :param csv_files: list of files to get the labels from (should be of format path;label)
+        :param export_lookup_filename: filename to export alphabet lookup dictionary
+        :param original_lookup_filename: original lookup filename to update (optional)
+        :return:
+        """
+        if original_lookup_filename:
+            with open(original_lookup_filename, 'r') as f:
+                lookup = json.load(f)
+            set_chars = set(list(lookup.keys()))
+        else:
+            set_chars = set(list(string.ascii_letters) + list(string.digits))
+            lookup = dict()
+
+        for filename in csv_files:
+            data = pd.read_csv(filename, sep=';', encoding='utf8', error_bad_lines=False, header=None,
+                               names=['path', 'transcription'], escapechar='\\')
+            for index, row in data.iterrows():
+                set_chars.update(row.transcription.split('|'))
+
+        # Update (key, values) of lookup table
+        for el in set_chars:
+            if el not in lookup.keys():
+                lookup[el] = max(lookup.values()) + 1 if lookup.values() else 0
+
+        lookup = map_lookup(lookup)
+
+        # Save new lookup
+        with open(export_lookup_filename, 'w', encoding='utf8') as f:
+            json.dump(lookup, f)
 
     @property
     def n_classes(self):
