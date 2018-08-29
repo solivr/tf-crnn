@@ -233,39 +233,22 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
     padding = True
 
     def input_fn():
-        dataset = tf.data.TextLineDataset(csv_filename)
-        with tf.name_scope('CSV_reading'):
+        if labels:
+            csv_types = [['None'], ['None']]
+        else:
+            csv_types = [['None']]
 
-            # -- Parse each line.
-            def _parse_csv_line(line):
-                if labels:
-                    csv_types = [['None'], ['None']]
-                    csv_column_names = ['filenames', 'labels']
-                else:
-                    csv_types = [['None']]
-                    csv_column_names = ['filenames']
-
-                # Decode the line into its fields
-                fields = tf.decode_csv(line, record_defaults=csv_types,
-                                       field_delim=params.csv_delimiter, name='csv_reading_op')
-                # Pack the result into a dictionary
-                features = dict(zip(csv_column_names, fields))
-
-                return features
-
-            dataset = dataset.map(_parse_csv_line, num_parallel_calls=22)
+        dataset = tf.contrib.data.CsvDataset(csv_filename, record_defaults=csv_types, header=False,
+                                             field_delim=params.csv_delimiter, use_quote_delim=True)
 
         dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1024, count=num_epochs))
 
         # -- Read image
-        def _image_reading_preprocessing(features: dict) -> dict():
+        def _image_reading_preprocessing(path, label) -> dict():
 
             # Load
-            image_content = tf.read_file(features['filenames'], name='filename_reader')
+            image_content = tf.read_file(path, name='filename_reader')
             # decode image is not used because it seems the shape is not set...
-            # image = tf.image.decode_jpeg(image_content, channels=params.input_channels,
-            #                              try_recover_truncated=True,name='image_decoding_op')
-            # tensorflow v1.8 change to :
             image = tf.cond(
                 tf.image.is_jpeg(image_content),
                 lambda: tf.image.decode_jpeg(image_content, channels=params.input_channels, name='image_decoding_op',
@@ -287,6 +270,7 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
                 img_width = tf.shape(image)[1]
 
             # Update features
+            features = {'filenames': path, 'labels': label}
             features.update({'images': image, 'images_widths': img_width})
 
             return features
