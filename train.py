@@ -84,7 +84,7 @@ def run(csv_files_train: List[str], csv_files_eval: List[str], output_model_dir:
         csv_delimiter=parameters.csv_delimiter)
 
     config_sess = tf.ConfigProto()
-    config_sess.gpu_options.per_process_gpu_memory_fraction = 0.8
+    # config_sess.gpu_options.per_process_gpu_memory_fraction = 0.9
     # config_sess.gpu_options.allow_growth = True
 
     # Config estimator
