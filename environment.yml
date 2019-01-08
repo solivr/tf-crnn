@@ -4,12 +4,13 @@ channels:
 dependencies:
   - imageio
   - opencv
-  - python
+  - python=3.5
   - tensorboard
+  - tensorflow-gpu
   - tqdm
+  - pandas
   - pip:
     - better-exceptions
     - sacred
-    - tensorflow
 prefix: /home/user/anaconda3/envs/tf_crnn
 
