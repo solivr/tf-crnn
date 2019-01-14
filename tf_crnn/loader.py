@@ -10,6 +10,22 @@ import numpy as np
 
 
 class PredictionModel:
+    """
+    Helper class to load an exported model and apply it to image segments for transcription.
+
+    :ivar session: ``tf.Session`` within which to run the loading process
+    :vartype session: tf.Session
+    :ivar model: loaded exported model
+    :vartype model:
+
+    :param model_dir: directory containing the saved model files.
+    :param session: ``tf.Session`` to load the model
+    :param signature: which signature to use to select the type of input :
+
+            - predictions (default) : input a grayscale image
+            - rgb_images : input a RGB image
+            - filename : input the filename of the image segment
+    """
 
     def __init__(self, model_dir: str, session: tf.Session=None, signature: str= 'predictions'):
         # Get session
@@ -48,12 +64,27 @@ class PredictionModel:
         self._input_tensor = self._input_dict[input_dict_key]
 
     def predict(self, input_to_predict: Union[np.ndarray, str]) -> dict:
+        """
+        Get transcription for input data.
+
+        :param input_to_predict: input data of the format specified in `signature` when
+            instantiating the object
+        :return: a dictionary with the predictions
+        """
         output = self._output_dict
         input_tensor = self._input_tensor
         return self.session.run(output, feed_dict={input_tensor: input_to_predict})
 
 
 class PredictionModelBatch:
+    """
+    The same helper class as ``PredictionModel`` but for batch prediction.
+
+    :ivar session: ``tf.Session``within which to run the loading process
+    :vartype session: tf.Session
+    :ivar model: loaded exported model
+    :vartype model:
+    """
 
     def __init__(self, model_dir: str, session: tf.Session = None, signature: str=DEFAULT_SERVING_SIGNATURE_DEF_KEY):
         # Get session

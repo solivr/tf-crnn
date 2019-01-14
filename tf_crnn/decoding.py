@@ -6,7 +6,15 @@ import tensorflow as tf
 from typing import List
 
 
-def get_words_from_chars(characters_list: List[str], sequence_lengths: List[int], name='chars_conversion'):
+def get_words_from_chars(characters_list: List[str], sequence_lengths: List[int], name='chars_conversion') -> tf.Tensor:
+    """
+    Joins separated characters to form words.
+
+    :param characters_list: List of Alphabet symbols (characters) to join to form words
+    :param sequence_lengths: list containing the length of each string sequence
+    :param name: op name to add to tf graph
+    :return:
+    """
     with tf.name_scope(name=name):
         def join_charcaters_fn(coords):
             return tf.reduce_join(characters_list[coords[0]:coords[1]])

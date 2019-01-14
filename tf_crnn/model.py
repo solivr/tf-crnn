@@ -23,6 +23,15 @@ def conv2d(input, filter, strides=[1, 1, 1, 1], padding='SAME', name=None):
 
 
 def deep_cnn(input_imgs: tf.Tensor, input_channels: int, is_training: bool, summaries: bool=True) -> tf.Tensor:
+    """
+    CNN part of the CRNN network.
+
+    :param input_imgs: input images [B, H, W, C]
+    :param input_channels: input channels, 1 for greyscale images, 3 for RGB color images
+    :param is_training: flag to indicate training or not
+    :param summaries: flag to enable bias and weight histograms to be visualized in Tensorboard
+    :return: tensor of shape [batch, final_width, final_height x final_features]
+    """
     assert (input_channels in [1, 3])
 
     input_tensor = input_imgs
@@ -159,6 +168,15 @@ def deep_cnn(input_imgs: tf.Tensor, input_channels: int, is_training: bool, summ
 
 
 def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=True) -> tf.Tensor:
+    """
+    Recurrent part of the CRNN network.
+    Uses a biderectional LSTM.
+
+    :param inputs: output of ``deep_cnn``
+    :param params: parameters of the model
+    :param summaries: flag to enable bias and weight histograms to be visualized in Tensorboard
+    :return: Tuple : (tensor [width(time), batch, n_classes], raw transcription codes)
+    """
     # Prepare data shape to match `bidirectional_rnn` function requirements
     # Current data input shape: (batch_size, n_steps, n_input) "(batch, time, height)"
 
@@ -209,18 +227,14 @@ def deep_bidirectional_lstm(inputs: tf.Tensor, params: Params, summaries: bool=T
 
 def crnn_fn(features, labels, mode, params):
     """
-    :param features: dict {
-                            'images'
-                            'images_widths'
-                            'filenames'
-                            }
-    :param labels: labels. string containing the transcription
-                    #flattend (1D) array with encoded label (one code per character)
-    :param mode:
-    :param params: dict {
-                            'Params',
-                            'TrainingParams'
-                        }
+    CRNN model definition for ``tf.Estimator``.
+    Combines ``deep_cnn`` and ``deep_bidirectional_lstm`` to define the model and adds loss computation and CTC decoder.
+
+    :param features: dictionary with keys : '`images`', '`images_widths`', '`filenames`'
+    :param labels: string containing the transcriptions.
+        Flattend (1D) array with encoded label (one code per character)
+    :param mode: TRAIN, EVAL, PREDICT
+    :param params: dictionary with keys: '`Params`', '`TrainingParams`'
     :return:
     """
 

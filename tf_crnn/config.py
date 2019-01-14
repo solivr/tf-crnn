@@ -18,12 +18,16 @@ class CONST:
 
 class Alphabet:
     """
-    Attributes:
-        blank_symbol : Blank symbol used for CTC
-        alphabet_units : list of elements composing the alphabet.
-                        The units may be a single character or multiple characters.
-        codes : list of int. Each alphabet unit has a unique code.
-        nclasses : number of alphabet units
+    Object for alphabet / symbols units.
+
+    :ivar _blank_symbol: Blank symbol used for CTC
+    :vartype _blank_symbol: str
+    :ivar _alphabet_units: list of elements composing the alphabet. The units may be a single character or multiple characters.
+    :vartype _alphabet_units: List[str]
+    :ivar _codes: Each alphabet unit has a unique corresponding code.
+    :vartype _codes: List[int]
+    :ivar _nclasses: number of alphabet units.
+    :vartype _nclasses: int
     """
     def __init__(self, lookup_alphabet_file: str=None, blank_symbol: str='$'):
 
@@ -33,6 +37,9 @@ class Alphabet:
             lookup_alphabet = load_lookup_from_json(lookup_alphabet_file)
             # Blank symbol must have the largest value
             if self._blank_symbol in lookup_alphabet.keys():
+                # # TODO : check if blank symbol is the last one
+                # assert lookup_alphabet_file[self._blank_symbol] == max(lookup_alphabet.values()), \
+                #     "Blank symbol should have the largest code integer"
                 lookup_alphabet[self._blank_symbol] = max(lookup_alphabet.values()) + 1
             else:
                 lookup_alphabet.update({self._blank_symbol: max(lookup_alphabet.values()) + 1})
@@ -45,9 +52,11 @@ class Alphabet:
                                   discarded_chars: str=';|{}'.format(string.whitespace[1:]),
                                   csv_delimiter: str=";") -> None:
         """
-        Checks if labels of input files contains only characters that are in the Alphabet
+        Checks if labels of input files contains only characters that are in the Alphabet.
+
         :param csv_filenames: list of the csv filename
         :param discarded_chars: discarded characters
+        :param csv_delimiter: character delimiting field in the csv file
         :return:
         """
         assert isinstance(csv_filenames, list), 'csv_filenames argument is not a list'
@@ -74,7 +83,8 @@ class Alphabet:
     def create_lookup_from_labels(cls, csv_files: List[str], export_lookup_filename: str,
                                   original_lookup_filename: str=None):
         """
-        Create a lookup dictionary for csv files containing labels.
+        Create a lookup dictionary for csv files containing labels. Exports a json file with the Alphabet.
+
         :param csv_files: list of files to get the labels from (should be of format path;label)
         :param export_lookup_filename: filename to export alphabet lookup dictionary
         :param original_lookup_filename: original lookup filename to update (optional)
@@ -124,16 +134,26 @@ class Alphabet:
 
 class TrainingParams:
     """
-    Attributes :
-        n_epochs: numbers of epochs to run the training
-        train_batch_size : batch size suring training
-        eval_batch_size : batch size during evaluation
-        learning_rate : initial learning rate
-        learning_decay_rate : decay rate for exponential learning rate
-        learning_decay_steps : decay steps for exponential learning rate
-        evaluate_every_epoch : evaluate every 'evaluate_every_epoch' epoch
-        save_interval : save the model every 'save_interval' step
-        optimizer : which optimizer to use ('adam', 'rms', 'ada')
+    Object for parameters related to the training.
+
+    :ivar n_epochs: numbers of epochs to run the training (default: 50)
+    :vartype n_epochs: int
+    :ivar train_batch_size: batch size during training (default: 64)
+    :vartype train_batch_size: int
+    :ivar eval_batch_size: batch size during evaluation (default: 128)
+    :vartype eval_batch_size: int
+    :ivar learning_rate: initial learning rate (default: 1e-4)
+    :vartype learning_rate: float
+    :ivar learning_decay_rate: decay rate for exponential learning rate (default: .96)
+    :vartype learning_decay_rate: float
+    :ivar learning_decay_steps: decay steps for exponential learning rate (default: 1000)
+    :vartype learning_decay_steps: int
+    :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
+    :vartype evaluate_every_epoch: int
+    :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
+    :vartype save_interval: int
+    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
+    :vartype optimizer: str
     """
     def __init__(self, **kwargs):
         self.n_epochs = kwargs.get('n_epochs', 50)
@@ -151,33 +171,47 @@ class TrainingParams:
 
         assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return self.__dict__
 
 
 class Params:
     """
-    Attributes:
-        input_shape : input shape of the image to batch (this is the shape after data augmentation)
-        input_channels: number of color channels for input image
-        csv_delimiter : character to delimit csv input files
-        string_split_delimiter: character that delimits each alphabet unit in the labels
-        num_gpus : number of gpus to use
-        lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
-        csv_files_train : csv filename which contains the (path;label) of each training sample
-        csv_files_eval : csv filename which contains the (path;label) of each eval sample
-        output_model_dir : output directory where the model will be saved and exported
-        keep_prob_dropout: keep probability
-        num_beam_paths : number of paths (transcriptions) to return for ctc beam search (only used when predicting)
-        data_augmentation: boolean if True augments data on the fly
-        data_augmentation_max_rotation : float, max permitted roation to apply to image during training (radians)
-        input_data_n_parallel_calls : int, number of parallel calls to make when using Dataset.map()
+    Object for general parameters
+
+    :ivar input_shape: input shape of the image to batch (this is the shape after data augmentation).
+        The original will either be resized or pad depending on its original size
+    :vartype input_shape: Tuple[int, int]
+    :ivar input_channels: number of color channels for input image
+    :vartype input_channels: int
+    :ivar csv_delimiter: character to delimit csv input files
+    :vartype csv_delimiter: str
+    :ivar string_split_delimiter: character that delimits each alphabet unit in the labels
+    :vartype string_split_delimiter: str
+    :ivar num_gpus: number of gpus to use
+    :vartype num_gpus: int
+    :ivar lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
+    :vartype lookup_alphabet_file: str
+    :ivar csv_files_train: csv filename which contains the (path;label) of each training sample
+    :vartype csv_files_train: str
+    :ivar csv_files_eval: csv filename which contains the (path;label) of each eval sample
+    :vartype csv_files_eval: str
+    :ivar output_model_dir: output directory where the model will be saved and exported
+    :vartype output_model_dir: str
+    :ivar keep_prob_dropout: keep probability
+    :vartype keep_prob_dropout: float
+    :ivar num_beam_paths: number of paths (transcriptions) to return for ctc beam search (only used when predicting)
+    :vartype num_beam_paths: int
+    :ivar data_augmentation: if True augments data on the fly
+    :vartype data_augmentation: bool
+    :ivar data_augmentation_max_rotation: max permitted roation to apply to image during training (radians)
+    :vartype data_augmentation_max_rotation: float
+    :ivar input_data_n_parallel_calls: number of parallel calls to make when using Dataset.map()
+    :vartype input_data_n_parallel_calls: int
     """
     def __init__(self, **kwargs):
-        # Shape of the image to be processed. The original with either be resized or pad depending on its original size
         self.input_shape = kwargs.get('input_shape', (32, 100))
         self.input_channels = kwargs.get('input_channels', 1)
-        # Either decode with the same alphabet or map capitals and lowercase letters to the same symbol (lowercase)
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
         self.string_split_delimiter = kwargs.get('string_split_delimiter', '|')
         self.num_gpus = kwargs.get('num_gpus', 1)
@@ -193,7 +227,11 @@ class Params:
 
         self._assign_alphabet()
 
-    def show_experiment_params(self):
+    def show_experiment_params(self) -> dict:
+        """
+        Returns a dictionary with the variables of the class.
+        :return:
+        """
         return vars(self)
 
     def _assign_alphabet(self):
@@ -210,6 +248,13 @@ class Params:
 
 
 def import_params_from_json(model_directory: str=None, json_filename: str=None) -> dict:
+    """
+    Read the exported json file with parameters of the experiment.
+
+    :param model_directory: Direcoty where the odel was exported
+    :param json_filename: filename of the file
+    :return: a dictionary containing the parameters of the experiment
+    """
 
     assert not all(p is None for p in [model_directory, json_filename]), 'One argument at least should not be None'
 

@@ -20,5 +20,14 @@ setup(name='tf_crnn',
             'opencv-python',
             'pandas'
       ],
+      extras_require={
+            'doc': [
+                  'sphinx',
+                  'sphinx-autodoc-typehints',
+                  'sphinx-rtd-theme',
+                  'sphinxcontrib-bibtex',
+                  'sphinxcontrib-websupport'
+            ],
+      },
       packages=find_packages(where='.'),
       zip_safe=False)

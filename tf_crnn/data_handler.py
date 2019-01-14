@@ -11,8 +11,9 @@ from typing import Tuple, Union, List
 
 def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # adapted from SeguinBe
     """
-    Rotates an image with a random angle
-    see https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders for formulae
+    Rotates an image with a random angle.
+    See https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders for formulae
+
     :param img: Tensor
     :param max_rotation: maximum angle to rotate (radians)
     :param crop: boolean to crop or not the image after rotation
@@ -53,6 +54,7 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
 def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.Tensor:
     """
     Given an image will pad its border adding a random number of rows and columns
+
     :param image: image to pad
     :param max_pad_w: maximum padding in width
     :param max_pad_h: maximum padding in height
@@ -70,6 +72,7 @@ def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.
 def augment_data(image: tf.Tensor, max_rotation: float=0.1) -> tf.Tensor:
     """
     Data augmentation on an image (padding, brightness, contrast, rotation)
+
     :param image: Tensor
     :param max_rotation: float, maximum permitted rotation (in radians)
     :return: Tensor
@@ -95,9 +98,11 @@ def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increm
         -> Tuple[tf.Tensor, tf.Tensor]:
     """
     Given an input image, will pad it to return a target_shape size padded image.
-    There is 3 cases:
+    There are 3 cases:
          - image width > target width : simple resizing to shrink the image
-         -
+         - image width >= 0.5*target width : pad the image
+         - image width < 0.5*target width : replicates the image segment and appends it
+
     :param image: Tensor of shape [H,W,C]
     :param target_shape: final shape after padding [H, W]
     :param increment: reduction factor due to pooling between input width and output width,
@@ -220,6 +225,7 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
                 data_augmentation: bool=False, num_epochs: int=None, image_summaries: bool=False):
     """
     Loads, preprocesses (data augmentation, padding) and feeds the data
+
     :param csv_filename: filename or list of filenames
     :param params: Params object containing all the parameters
     :param labels: transcription labels
@@ -230,7 +236,6 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
     :return: data_loader function
     """
 
-    # TODO set num_parallel_calls as a config params
     padding = True
 
     def input_fn():
@@ -292,6 +297,17 @@ def data_loader(csv_filename: Union[List[str], str], params: Params, labels=True
 
 
 def serving_single_input(fixed_height: int=32, min_width: int=8):
+    """
+    Serving input function needed for export (in TensorFlow).
+    Features to serve :
+        - `images` : greyscale image
+        - `input_filename` : filename of image segment
+        - `input_rgb`: RGB image segment
+
+    :param fixed_height: height  of the image to format the input data with
+    :param min_width: minimum width to resize the image
+    :return: serving_input_fn
+    """
 
     def serving_input_fn():
 
@@ -335,10 +351,11 @@ def serving_single_input(fixed_height: int=32, min_width: int=8):
 def serving_batch_filenames_fn(input_shape=(32, 100), n_channels: int=1, padding=True):
     """
     Serving input function for batch inference using filenames as inputs
+
     :param input_shape: shape of the input after resizing/padding
     :param n_channels: number of channels of images
     :param padding: if True, keeps the image ratio and pads it to get to 'input_shape' shape,
-                    if False will resize the image using bilinear interpolation
+        if False will resize the image using bilinear interpolation
     :param batch_size: batch_size for inference
     :return: serving input function
     """
