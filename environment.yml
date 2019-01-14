@@ -3,6 +3,7 @@ channels:
   - defaults
 dependencies:
   - imageio
+  - numpy
   - opencv
   - python=3.5
   - tensorboard

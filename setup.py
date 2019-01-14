@@ -13,6 +13,7 @@ setup(name='tf_crnn',
       install_requires=[
             'tensorflow-gpu>=1.9',
             'imageio',
+            'numpy',
             'tqdm',
             'sacred',
             'tensorflow-tensorboard',
