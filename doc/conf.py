@@ -41,7 +41,6 @@ release = ''
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
-    'sphinx.ext.doctest',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
@@ -181,3 +180,10 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
+autodoc_mock_imports = [
+    # 'numpy',
+    'tensorflow',
+    'pandas',
+    'typing',
+    'cv2'
+]
