@@ -13,6 +13,7 @@
   "csv_delimiter" : ";",
   "data_augmentation_max_rotation" : 0.1,
   "input_data_n_parallel_calls" : 4,
+  "num_beam_paths": 2,
   "lookup_alphabet_file" : "./data/alphabet/lookup_letters_digits_symbols.json",
   "csv_files_train" : ["./data/csv/train_sample.csv"],
   "csv_files_eval" : ["./data/csv/eval_sample.csv"],

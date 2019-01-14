@@ -12,5 +12,8 @@ dependencies:
   - pip:
     - better-exceptions
     - sacred
+    - sphinx
+    - sphinx-autodoc-typehints
+    - sphinx-rtd-theme
 prefix: /home/user/anaconda3/envs/tf_crnn
 
