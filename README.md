@@ -11,4 +11,8 @@ This version uses the `tf.estimator.Estimator` to build the model and `tf.data` 
 
 
 ## Installation
-See the [docs](https://tf-crnn.readthedocs.io/) for the installation procedures and how to use it.
+`tf_crnn` make use of `tensorflow-gpu` package (so CUDA and cuDNN are needed). 
+
+You can install it using the `environment.yml` file provided and use it within an environment, or install and run it with Docker.
+
+See the [docs](https://tf-crnn.readthedocs.io/en/latest/start/index.html#) for the installation procedures and how to use it.
