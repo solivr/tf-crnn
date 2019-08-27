@@ -8,6 +8,7 @@ from tensorflow.keras.backend import ctc_batch_cost
 from tensorflow.keras.layers import Layer, Conv2D, BatchNormalization, MaxPool2D, Input, Permute, \
     Reshape, Bidirectional, LSTM, Dense, Softmax, Lambda
 from typing import List, Tuple
+from .config import Params
 
 
 class ConvBlock(Layer):
@@ -41,10 +42,7 @@ class ConvBlock(Layer):
         return x
 
 
-def get_crnn_model(params_dict: dict=None):
-
-    parameters = params_dict['parameters']
-    training_parameters = params_dict['training_parameters']
+def get_crnn_output(input_images, parameters: Params=None):
 
     # params of the architecture
     cnn_features_list = parameters.cnn_features_list
@@ -54,14 +52,6 @@ def get_crnn_model(params_dict: dict=None):
     cnn_stride_size = parameters.cnn_stride_size
     cnn_batch_norm = parameters.cnn_batch_norm
     rnn_units = parameters.rnn_units
-    h, w = parameters.input_shape
-    c = parameters.input_channels
-
-    input_images = Input(shape=(h, w, c), name='input_images')
-    input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
-
-    label_codes = Input(shape=[parameters.max_chars_per_string], dtype='int32', name='label_codes')
-    label_seq_length = Input(shape=[1], dtype='int64', name='label_seq_length')
 
     # CNN layers
     cnn_params = zip(cnn_features_list, cnn_kernel_size, cnn_stride_size, cnn_pool_size,
@@ -87,12 +77,32 @@ def get_crnn_model(params_dict: dict=None):
     x = Dense(parameters.alphabet.n_classes)(x)
     net_output = Softmax(name='sorftmax_output')(x)
 
+    return net_output
+
+
+def get_model_train(params_dict: dict=None):
+    parameters = params_dict['parameters']
+    training_parameters = params_dict['training_parameters']
+
+    h, w = parameters.input_shape
+    c = parameters.input_channels
+
+    input_images = Input(shape=(h, w, c), name='input_images')
+    input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
+
+    label_codes = Input(shape=[parameters.max_chars_per_string], dtype='int32', name='label_codes')
+    label_seq_length = Input(shape=[1], dtype='int64', name='label_seq_length')
+
+    net_output = get_crnn_output(input_images, parameters)
+
     # Loss
     def _ctc_loss_fn(args):
         preds, label_codes, input_length, label_length = args
         return ctc_batch_cost(label_codes, preds, input_length, label_length)
     loss_ctc = Lambda(_ctc_loss_fn, output_shape=(1,), name='ctc_loss')(
         [net_output, label_codes, input_seq_len, label_seq_length])
+
+    # tf.summary.scalar('loss', tf.reduce_mean(loss_ctc))
 
     # Define model and compile it
     model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=loss_ctc)
