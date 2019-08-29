@@ -7,54 +7,29 @@ import numpy as np
 import os
 from .config import Params
 import pandas as pd
+from taputapu.io.image import get_image_shape_without_loading
 
 
-def _discard_long_labels(labels,
-                         maximum_length: int,
-                         string_split_delimiter: str) -> list:
-    """
-    Discard samples that have a longer labels than ``maximum_length``
-
-    :param maximum_length: maximum characters per string
-    :param string_split_delimiter:
-    :return: updated csv_filename, same type as input
-    """
-    # Remove lables that are longer than maximum_length
-    updated_labels = map(lambda x: re.sub(re.escape(string_split_delimiter), '', x), labels)
-    updated_labels = [lb for lb, upd_lb in zip(labels, updated_labels) if len(upd_lb) <= maximum_length]
-
-    n_removed = len(labels) - len(updated_labels)
-    if n_removed > 0:
-        print('-- Removed {} samples ({:.2f} %) which label '
-              'is longer than {} '.format(n_removed,
-                                          100 * n_removed / len(labels),
-                                          maximum_length))
-
-    return updated_labels
-
-
-def _discard_long_label(label,
-                        maximum_length: int,
-                        string_split_delimiter: str) -> list:
-    """
-    Discard samples that have a longer labels than ``maximum_length``
-
-    :param maximum_length: maximum characters per string
-    :param string_split_delimiter:
-    :return: updated csv_filename, same type as input
-    """
-    # Remove lable that are longer than maximum_length
-    updated_label = re.sub(re.escape(string_split_delimiter), '', label)
-    updated_labels = [lb for lb, upd_lb in zip(labels, updated_labels) if len(upd_lb) <= maximum_length]
-
-    n_removed = len(labels) - len(updated_labels)
-    if n_removed > 0:
-        print('-- Removed {} samples ({:.2f} %) which label '
-              'is longer than {} '.format(n_removed,
-                                          100 * n_removed / len(labels),
-                                          maximum_length))
-
-    return updated_labels
+# def _discard_long_labels(labels,
+#                          maximum_length: int,
+#                          string_split_delimiter: str) -> list:
+#     """
+#     Discard samples that have a longer labels than ``maximum_length``
+#
+#     :param maximum_length: maximum characters per string
+#     :param string_split_delimiter:
+#     :return: updated csv_filename, same type as input
+#     """
+#     # Remove lables that are longer than maximum_length
+#     updated_labels = map(lambda x: re.sub(re.escape(string_split_delimiter), '', x), labels)
+#     updated_labels = [lb for lb, upd_lb in zip(labels, updated_labels) if len(upd_lb) <= maximum_length]
+#
+#     n_removed = len(labels) - len(updated_labels)
+#     if n_removed > 0:
+#         print('-- Removed {} samples ({:.2f} %) which label '
+#               'is longer than {} '.format(n_removed,
+#                                           100 * n_removed / len(labels),
+#                                           maximum_length))
 
 
 def _convert_label_to_dense_codes(labels,
@@ -81,6 +56,17 @@ def _convert_label_to_dense_codes(labels,
     return dense_codes, seq_lengths
 
 
+def _compute_length_inputs(path, target_shape):
+
+    w, h = get_image_shape_without_loading(path)
+    ratio = w / h
+
+    new_h = target_shape[0]
+    new_w = np.minimum(new_h * ratio, target_shape[1])
+
+    return new_w
+
+
 def preprocess_csv(csv_filename: str,
                    parameters: Params,
                    output_csv_filename: str) -> None:
@@ -104,11 +90,26 @@ def preprocess_csv(csv_filename: str,
                             escapechar="\\",
                             quoting=0)
 
+    original_len = len(dataframe)
+
     dataframe['label_string'] = dataframe.labels.apply(lambda x: re.sub(re.escape(parameters.string_split_delimiter), '', x))
     dataframe['label_len'] = dataframe.label_string.apply(lambda x: len(x))
 
     # remove long labels
-    dataframe = dataframe[dataframe.label_len <= parameters.max_chars_per_string - 5]
+    dataframe = dataframe[dataframe.label_len <= parameters.max_chars_per_string]
+
+    # Compute width images (after resizing)
+    dataframe['input_length'] = dataframe.paths.apply(lambda x: _compute_length_inputs(x, parameters.input_shape))
+    dataframe.input_length = dataframe.input_length.apply(lambda x: np.floor(x / parameters.n_pool))
+    # Remove items with longer label than input
+    dataframe = dataframe[dataframe.label_len < dataframe.input_length]
+
+    final_length = len(dataframe)
+
+    n_removed = original_len - final_length
+    if n_removed > 0:
+        print('-- Removed {} samples ({:.2f} %)'.format(n_removed,
+                                                        100 * n_removed / original_len))
 
     # Convert fields to list
     paths = dataframe.paths.to_list()
