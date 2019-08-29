@@ -305,9 +305,6 @@ def dataset_generator(csv_filename: Union[List[str], str],
                        num_epochs: int=None):
     do_padding = True
 
-    cnn_params = zip(params.cnn_pool_size, params.cnn_pool_strides, params.cnn_stride_size)
-    n_pool = reduce(lambda i, j: i + j, map(lambda k: k[0][1] * k[1][1] * k[2][1], cnn_params))
-
     if labels:
         column_defaults = [['None'], ['None'], tf.int32]
         column_names = ['paths', 'label_codes', 'label_seq_length']
@@ -365,7 +362,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
             image = tf.image.resize_images(image, size=params.input_shape)
             img_width = tf.shape(image)[1]
 
-        input_seq_length = tf.cast(tf.floor(tf.divide(img_width, n_pool)), tf.int32)
+        input_seq_length = tf.cast(tf.floor(tf.divide(img_width, params.n_pool)), tf.int32)
 
         assert_op = tf.debugging.assert_greater_equal(input_seq_length,
                                                       features['label_seq_length'])

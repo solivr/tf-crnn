@@ -8,6 +8,7 @@ from .alphabet_helpers import load_lookup_from_json, map_lookup
 from glob import glob
 import string
 import csv
+from functools import reduce
 import pandas as pd
 from typing import List
 
@@ -240,6 +241,9 @@ class Params:
         self.num_gpus = kwargs.get('num_gpus', 1)
 
         self._assign_alphabet()
+
+        cnn_params = zip(self.cnn_pool_size, self.cnn_pool_strides, self.cnn_stride_size)
+        self.n_pool = reduce(lambda i, j: i + j, map(lambda k: k[0][1] * k[1][1] * k[2][1], cnn_params))
 
         # TODO add additional checks for the architecture
 
