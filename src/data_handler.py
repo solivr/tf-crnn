@@ -7,6 +7,7 @@ import numpy as np
 from .config import Params, CONST
 from typing import Tuple, Union, List
 from functools import reduce
+import collections
 
 
 def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # adapted from SeguinBe
@@ -193,34 +194,168 @@ def padding_inputs_width(image: tf.Tensor,
     return pad_image, new_w  # new_w = image width used for computing sequence lengths
 
 
-def dataset_generator(csv_filename: Union[List[str], str],
-                      params: Params,
-                      labels: bool=True,
-                      batch_size: int=64,
-                      data_augmentation: bool=False,
-                      num_epochs: int=None):
+# def dataset_generator(csv_filename: Union[List[str], str],
+#                       params: Params,
+#                       labels: bool=True,
+#                       batch_size: int=64,
+#                       data_augmentation: bool=False,
+#                       num_epochs: int=None):
+#
+#     do_padding = True
+#
+#     cnn_params = zip(params.cnn_pool_size, params.cnn_pool_strides, params.cnn_stride_size)
+#     n_pool = reduce(lambda i, j: i + j, map(lambda k: k[0][1] * k[1][1] * k[2][1], cnn_params))
+#
+#     if labels:
+#         csv_types = [['None'], ['None'], tf.int32]
+#         column_names = ['paths', 'label_codes', 'label_seq_length']
+#     else:
+#         csv_types = [['None']]
+#         column_names = ['input_images']
+#
+#     # Helper to read content of files
+#     def _read_content(path):
+#         image_content = tf.io.read_file(path)
+#         image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
+#                                   try_recover_truncated=True, name='image_decoding_op')
+#         return image
+#
+#     def _padding_or_resize(image) -> tf.data.Dataset:
+#         # Padding
+#         if do_padding:
+#             with tf.name_scope('do_padding'):
+#                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
+#                                                         increment=CONST.DIMENSION_REDUCTION_W_POOLING)
+#         # Resize
+#         else:
+#             image = tf.image.resize_images(image, size=params.input_shape)
+#             img_width = tf.shape(image)[1]
+#
+#         input_seq_length = tf.cast(tf.floor(tf.divide(img_width, n_pool)), tf.int32)
+#
+#         return {'input_images': image,
+#                 'input_seq_length': input_seq_length}
+#
+#     def _load_paths(features, labels):
+#         """
+#         Load images from string filename, and pad/resize it
+#         """
+#         path_ds = tf.data.Dataset.from_tensor_slices(features['paths'])
+#         image_ds = path_ds.map(_read_content)
+#         image_ds = image_ds.map(_padding_or_resize)
+#         return image_ds
+#
+#     def _get_features(features, string_label_codes):
+#         splits = tf.sparse.to_dense(tf.strings.split(string_label_codes, sep=' '))
+#         label_codes = tf.strings.to_number(splits, out_type=tf.int32)
+#
+#         return {'label_codes': label_codes,
+#                 'label_seq_length': features['label_seq_length']}
+#
+#     def _format_extended_dataset(label_features, images_features):
+#         assert_op = tf.debugging.assert_greater_equal(images_features['input_seq_length'],
+#                                                       label_features['label_seq_length'])
+#         with tf.control_dependencies([assert_op]):
+#             return {'input_images': images_features['input_images'],
+#                     'input_seq_length': images_features['input_seq_length'],
+#                     'label_codes': label_features['label_codes'],
+#                     'label_seq_length': label_features['label_seq_length']}, np.zeros(batch_size)
+#
+#     # this returns a dataset with structure ({'paths': paths, 'label_seq_length': label_seq_length}, label_codes)
+#     dataset = tf.data.experimental.make_csv_dataset(csv_filename,
+#                                                     batch_size=batch_size,
+#                                                     column_names=column_names,
+#                                                     label_name='label_codes',
+#                                                     column_defaults=csv_types,
+#                                                     field_delim=params.csv_delimiter,
+#                                                     use_quote_delim=True,
+#                                                     header=False,
+#                                                     num_epochs=num_epochs)
+#
+#     # First create a dataset with the loaded images (int32)
+#     ds_images_features = dataset.flat_map(_load_paths)
+#     # Then create a dataset with the original features (except paths)
+#     ds_label_features = dataset.map(_get_features)
+#     # Create a dataset combining images and original features
+#     # ds_images is already batched in order to have the same dimensions as ds_original_features
+#     extended_ds = tf.data.Dataset.zip((ds_label_features, ds_images_features.batch(batch_size)))
+#
+#     # Get the dataset formatted as we need it {(features dict}, dummy label)
+#     dataset = extended_ds.map(_format_extended_dataset)
+#
+#     def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
+#
+#         image = features['input_images']
+#         image = augment_data(image, params.data_augmentation_max_rotation)
+#
+#         features.update({'input_images': image})
+#         return features, label
+#
+#     if data_augmentation:
+#         dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+#
+#     return dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
+
+def dataset_generator(csv_filename: Union[List[str], str],
+                       params: Params,
+                       labels: bool=True,
+                       batch_size: int=64,
+                       data_augmentation: bool=False,
+                       num_epochs: int=None):
     do_padding = True
 
     cnn_params = zip(params.cnn_pool_size, params.cnn_pool_strides, params.cnn_stride_size)
     n_pool = reduce(lambda i, j: i + j, map(lambda k: k[0][1] * k[1][1] * k[2][1], cnn_params))
 
     if labels:
-        csv_types = [['None'], ['None'], tf.int32]
+        column_defaults = [['None'], ['None'], tf.int32]
         column_names = ['paths', 'label_codes', 'label_seq_length']
+        label_name = 'label_codes'
     else:
-        csv_types = [['None']]
+        column_defaults = [['None']]
         column_names = ['input_images']
+        label_name = None
 
-    # Helper to read content of files
-    def _read_content(path):
+    num_parallel_reads = 1
+
+    # ----- from data.experimental.make_csv_dataset
+    def filename_to_dataset(filename):
+        dataset = tf.data.experimental.CsvDataset(filename,
+                                                  record_defaults=column_defaults,
+                                                  field_delim=params.csv_delimiter,
+                                                  header=False)
+        return dataset
+
+    def map_fn(*columns):
+        """Organizes columns into a features dictionary.
+        Args:
+          *columns: list of `Tensor`s corresponding to one csv record.
+        Returns:
+          An OrderedDict of feature names to values for that particular record. If
+          label_name is provided, extracts the label feature to be returned as the
+          second element of the tuple.
+        """
+        features = collections.OrderedDict(zip(column_names, columns))
+        if label_name is not None:
+            label = features.pop(label_name)
+            return features, label
+
+        return features
+
+    dataset = tf.data.Dataset.from_tensor_slices(csv_filename)
+    # Read files sequentially (if num_parallel_reads=1) or in parallel
+    dataset = dataset.apply(tf.data.experimental.parallel_interleave(filename_to_dataset,
+                                                                     cycle_length=num_parallel_reads))
+    dataset = dataset.map(map_fn)
+    # -----
+
+    def _load_image_and_pad_or_resize(features, labels):
+        path = features['paths']
         image_content = tf.io.read_file(path)
         image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
                                   try_recover_truncated=True, name='image_decoding_op')
-        return image
 
-    def _padding_or_resize(image) -> tf.data.Dataset:
-        # Padding
         if do_padding:
             with tf.name_scope('do_padding'):
                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
@@ -232,55 +367,19 @@ def dataset_generator(csv_filename: Union[List[str], str],
 
         input_seq_length = tf.cast(tf.floor(tf.divide(img_width, n_pool)), tf.int32)
 
-        return {'input_images': image,
-                'input_seq_length': input_seq_length}
-
-    def _load_paths(features, labels):
-        """
-        Load images from string filename, and pad/resize it
-        """
-        path_ds = tf.data.Dataset.from_tensor_slices(features['paths'])
-        image_ds = path_ds.map(_read_content)
-        image_ds = image_ds.map(_padding_or_resize)
-        return image_ds
-
-    def _get_features(features, string_label_codes):
-        splits = tf.sparse.to_dense(tf.strings.split(string_label_codes, sep=' '))
-        label_codes = tf.strings.to_number(splits, out_type=tf.int32)
-
-        return {'label_codes': label_codes,
-                'label_seq_length': features['label_seq_length']}
-
-    def _format_extended_dataset(label_features, images_features):
-        assert_op = tf.debugging.assert_greater_equal(images_features['input_seq_length'],
-                                                      label_features['label_seq_length'])
+        assert_op = tf.debugging.assert_greater_equal(input_seq_length,
+                                                      features['label_seq_length'])
         with tf.control_dependencies([assert_op]):
-            return {'input_images': images_features['input_images'],
-                    'input_seq_length': images_features['input_seq_length'],
-                    'label_codes': label_features['label_codes'],
-                    'label_seq_length': label_features['label_seq_length']}, np.zeros(batch_size)
+            return {'input_images': image,
+                    'label_seq_length': features['label_seq_length'],
+                    'input_seq_length': input_seq_length}, labels
 
-    # this returns a dataset with structure ({'paths': paths, 'label_seq_length': label_seq_length}, label_codes)
-    dataset = tf.data.experimental.make_csv_dataset(csv_filename,
-                                                    batch_size=batch_size,
-                                                    column_names=column_names,
-                                                    label_name='label_codes',
-                                                    column_defaults=csv_types,
-                                                    field_delim=params.csv_delimiter,
-                                                    use_quote_delim=True,
-                                                    header=False,
-                                                    num_epochs=num_epochs)
+    def _format_label_codes(features, string_label_codes):
+        splits = tf.sparse.to_dense(tf.strings.split([string_label_codes], sep=' '))
+        label_codes = tf.squeeze(tf.strings.to_number(splits, out_type=tf.int32), axis=0)
 
-    # First create a dataset with the loaded images (int32)
-    ds_images_features = dataset.flat_map(_load_paths)
-    # Then create a dataset with the original features (except paths)
-    ds_label_features = dataset.map(_get_features)
-    # Create a dataset combining images and original features
-    # ds_images is already batched in order to have the same dimensions as ds_original_features
-    extended_ds = tf.data.Dataset.zip((ds_label_features, ds_images_features.batch(batch_size)))
-
-    # Get the dataset formatted as we need it {(features dict}, dummy label)
-    dataset = extended_ds.map(_format_extended_dataset)
+        features.update({'label_codes': label_codes})
+        return features, [0]
 
     def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
 
@@ -290,10 +389,13 @@ def dataset_generator(csv_filename: Union[List[str], str],
         features.update({'input_images': image})
         return features, label
 
+    dataset = dataset.map(_load_image_and_pad_or_resize)
+    dataset = dataset.map(_format_label_codes)
     if data_augmentation:
         dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.shuffle(1024, reshuffle_each_iteration=False).repeat(1)
 
-    return dataset.prefetch(tf.data.experimental.AUTOTUNE)
+    return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
 
 
 def serving_single_input(input_shape: Tuple[int, int]):
