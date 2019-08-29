@@ -6,6 +6,7 @@ import tensorflow as tf
 import numpy as np
 from .config import Params, CONST
 from typing import Tuple, Union, List
+from functools import reduce
 
 
 def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # adapted from SeguinBe
@@ -109,8 +110,9 @@ def get_resized_width(image: tf.Tensor,
     return new_width, image_ratio
 
 
-def padding_inputs_width(image: tf.Tensor, target_shape: Tuple[int, int], increment: int) \
-        -> Tuple[tf.Tensor, tf.Tensor]:
+def padding_inputs_width(image: tf.Tensor,
+                         target_shape: Tuple[int, int],
+                         increment: int) -> Tuple[tf.Tensor, tf.Tensor]:
     """
     Given an input image, will pad it to return a target_shape size padded image.
     There are 3 cases:
@@ -200,30 +202,85 @@ def dataset_generator(csv_filename: Union[List[str], str],
 
     do_padding = True
 
+    cnn_params = zip(params.cnn_pool_size, params.cnn_pool_strides, params.cnn_stride_size)
+    n_pool = reduce(lambda i, j: i + j, map(lambda k: k[0][1] * k[1][1] * k[2][1], cnn_params))
+
     if labels:
-        csv_types = [['None'], ['None']]
+        csv_types = [['None'], ['None'], tf.int32]
+        column_names = ['paths', 'label_codes', 'label_seq_length']
     else:
         csv_types = [['None']]
+        column_names = ['input_images']
 
-    dataset = tf.data.experimental.CsvDataset(csv_filename, record_defaults=csv_types, header=False,
-                                              field_delim=params.csv_delimiter, use_quote_delim=True)
+    # Helper to read content of files
+    def _read_content(path):
+        image_content = tf.io.read_file(path)
+        image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
+                                  try_recover_truncated=True, name='image_decoding_op')
+        return image
 
-    dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=1024, count=num_epochs))
+    def _padding_or_resize(image) -> tf.data.Dataset:
+        # Padding
+        if do_padding:
+            with tf.name_scope('do_padding'):
+                image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
+                                                        increment=CONST.DIMENSION_REDUCTION_W_POOLING)
+        # Resize
+        else:
+            image = tf.image.resize_images(image, size=params.input_shape)
+            img_width = tf.shape(image)[1]
 
-    def _image_reading_fn(path: str, label: str) -> tf.data.Dataset:
-        # Load
-        image_content = tf.io.read_file(path, name='filename_reader')
-        # decode image is not used because it seems the shape is not set...
-        image = tf.cond(
-            tf.image.is_jpeg(image_content),
-            lambda: tf.image.decode_jpeg(image_content, channels=params.input_channels, name='image_decoding_op',
-                                         try_recover_truncated=True),
-            lambda: tf.image.decode_png(image_content, channels=params.input_channels, name='image_decoding_op'))
+        input_seq_length = tf.cast(tf.floor(tf.divide(img_width, n_pool)), tf.int32)
 
-        # return {'input_images': tf.cast(image, dtype=tf.float32), 'filenames': path}, label
-        return {'input_images': tf.cast(image, dtype=tf.float32)}, label
+        return {'input_images': image,
+                'input_seq_length': input_seq_length}
 
-    dataset = dataset.map(_image_reading_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    def _load_paths(features, labels):
+        """
+        Load images from string filename, and pad/resize it
+        """
+        path_ds = tf.data.Dataset.from_tensor_slices(features['paths'])
+        image_ds = path_ds.map(_read_content)
+        image_ds = image_ds.map(_padding_or_resize)
+        return image_ds
+
+    def _get_features(features, string_label_codes):
+        splits = tf.sparse.to_dense(tf.strings.split(string_label_codes, sep=' '))
+        label_codes = tf.strings.to_number(splits, out_type=tf.int32)
+
+        return {'label_codes': label_codes,
+                'label_seq_length': features['label_seq_length']}
+
+    def _format_extended_dataset(label_features, images_features):
+        assert_op = tf.debugging.assert_greater_equal(images_features['input_seq_length'],
+                                                      label_features['label_seq_length'])
+        with tf.control_dependencies([assert_op]):
+            return {'input_images': images_features['input_images'],
+                    'input_seq_length': images_features['input_seq_length'],
+                    'label_codes': label_features['label_codes'],
+                    'label_seq_length': label_features['label_seq_length']}, np.zeros(batch_size)
+
+    # this returns a dataset with structure ({'paths': paths, 'label_seq_length': label_seq_length}, label_codes)
+    dataset = tf.data.experimental.make_csv_dataset(csv_filename,
+                                                    batch_size=batch_size,
+                                                    column_names=column_names,
+                                                    label_name='label_codes',
+                                                    column_defaults=csv_types,
+                                                    field_delim=params.csv_delimiter,
+                                                    use_quote_delim=True,
+                                                    header=False,
+                                                    num_epochs=num_epochs)
+
+    # First create a dataset with the loaded images (int32)
+    ds_images_features = dataset.flat_map(_load_paths)
+    # Then create a dataset with the original features (except paths)
+    ds_label_features = dataset.map(_get_features)
+    # Create a dataset combining images and original features
+    # ds_images is already batched in order to have the same dimensions as ds_original_features
+    extended_ds = tf.data.Dataset.zip((ds_label_features, ds_images_features.batch(batch_size)))
+
+    # Get the dataset formatted as we need it {(features dict}, dummy label)
+    dataset = extended_ds.map(_format_extended_dataset)
 
     def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
 
@@ -236,24 +293,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
     if data_augmentation:
         dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-    def _padding_or_resize(features: dict, label) -> tf.data.Dataset:
-        image = features['input_images']
-        # Padding
-        if do_padding:
-            with tf.name_scope('do_padding'):
-                image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
-                                                        increment=CONST.DIMENSION_REDUCTION_W_POOLING)
-        # Resize
-        else:
-            image = tf.image.resize_images(image, size=params.input_shape)
-            img_width = tf.shape(image)[1]
-
-        features.update({'input_images': image, 'input_widths': img_width})
-        return features, label
-
-    dataset = dataset.map(_padding_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-    return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+    return dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
 
 def serving_single_input(input_shape: Tuple[int, int]):

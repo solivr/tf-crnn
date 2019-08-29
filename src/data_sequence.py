@@ -95,7 +95,6 @@ class SequenceDataset(Sequence):
         Discard samples that have a longer labels than ``maximum_length``
 
         :param maximum_length: maximum characters per string
-        :param csv_separator:
         :param string_split_delimiter:
         :return: updated csv_filename, same type as input
         """

@@ -90,7 +90,7 @@ def get_model_train(params_dict: dict=None):
     input_images = Input(shape=(h, w, c), name='input_images')
     input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
 
-    label_codes = Input(shape=[parameters.max_chars_per_string], dtype='int32', name='label_codes')
+    label_codes = Input(shape=(parameters.max_chars_per_string), dtype='int32', name='label_codes')
     label_seq_length = Input(shape=[1], dtype='int64', name='label_seq_length')
 
     net_output = get_crnn_output(input_images, parameters)
