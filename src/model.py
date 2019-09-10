@@ -4,7 +4,8 @@ __license__ = "GPL"
 
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.backend import ctc_batch_cost
+from tensorflow.keras.metrics import Metric
+from tensorflow.keras.backend import ctc_batch_cost, ctc_decode
 from tensorflow.keras.layers import Layer, Conv2D, BatchNormalization, MaxPool2D, Input, Permute, \
     Reshape, Bidirectional, LSTM, Dense, Softmax, Lambda
 from typing import List, Tuple
@@ -42,6 +43,34 @@ class ConvBlock(Layer):
         return x
 
 
+class CERMetric(Metric):
+    def __init__(self):
+        super(CERMetric, self).__init__()
+
+        self.distance = self.add_weight('distance')
+        self.count_chars = self.add_weight('count_chars')
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # y_pred needs to be decoded (its the logits)
+        pred_codes_dense = ctc_decode(y_pred, pred_sequence_length, greedy=True)
+
+        # create a sparse tensor
+        idx = tf.where(tf.not_equal(pred_codes_dense, -1))
+        pred_codes_sparse = tf.SparseTensor(idx, tf.gather_nd(pred_codes_dense, idx), pred_codes_dense.get_shape())
+
+        distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, y_true, normalize=False))
+        self.distance.assign_add(distance)
+
+        self.count_chars.assign_add(tf.reduce_sum(true_sequence_length))
+
+    def result(self):
+        return tf.divide(self.distance, self.count_chars) if tf.greater(self.count_chars, 0) else 1.0
+
+    def reset_states(self):
+        self.distance.assign(0)
+        self.count_chars.assign(0)
+
+
 def get_crnn_output(input_images, parameters: Params=None):
 
     # params of the architecture
@@ -75,14 +104,12 @@ def get_crnn_output(input_images, parameters: Params=None):
 
     # Dense and softmax
     x = Dense(parameters.alphabet.n_classes)(x)
-    net_output = Softmax(name='sorftmax_output')(x)
+    net_output = Softmax(name='softmax_output')(x)
 
     return net_output
 
 
-def get_model_train(params_dict: dict=None):
-    parameters = params_dict['parameters']
-    training_parameters = params_dict['training_parameters']
+def get_model_train(parameters: Params):
 
     h, w = parameters.input_shape
     c = parameters.input_channels
@@ -90,23 +117,74 @@ def get_model_train(params_dict: dict=None):
     input_images = Input(shape=(h, w, c), name='input_images')
     input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
 
-    label_codes = Input(shape=(parameters.max_chars_per_string), dtype='int32', name='label_codes')
+    label_codes = Input(shape=(parameters.max_chars_per_string), dtype=tf.int32, name='label_codes')
     label_seq_length = Input(shape=[1], dtype='int64', name='label_seq_length')
 
     net_output = get_crnn_output(input_images, parameters)
 
     # Loss
-    def _ctc_loss_fn(args):
-        preds, label_codes, input_length, label_length = args
-        return ctc_batch_cost(label_codes, preds, input_length, label_length)
-    loss_ctc = Lambda(_ctc_loss_fn, output_shape=(1,), name='ctc_loss')(
-        [net_output, label_codes, input_seq_len, label_seq_length])
+    # def _ctc_loss_fn(args):
+    #     preds, label_codes, input_length, label_length = args
+    #     return ctc_batch_cost(label_codes, preds, input_length, label_length)
+    # loss_ctc = Lambda(_ctc_loss_fn, output_shape=(1,), name='ctc_loss')(
+    #     [net_output, label_codes, input_seq_len, label_seq_length])
+    def warp_ctc_loss(y_true, y_pred):
+        return ctc_batch_cost(label_codes, y_pred, input_seq_len, label_seq_length)
 
     # tf.summary.scalar('loss', tf.reduce_mean(loss_ctc))
 
+    # Metric
+    def warp_cer_metric(y_true, y_pred):
+        pred_sequence_length, true_sequence_length = input_seq_len, label_seq_length
+
+        # y_pred needs to be decoded (its the logits)
+        pred_codes_dense = ctc_decode(y_pred, tf.squeeze(pred_sequence_length, axis=-1), greedy=True)
+        pred_codes_dense = tf.squeeze(tf.cast(pred_codes_dense[0], tf.int64), axis=0)  # only [0] if greedy=true
+
+        # create sparse tensor
+        idx = tf.where(tf.not_equal(pred_codes_dense, -1))
+        pred_codes_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
+                                            tf.gather_nd(pred_codes_dense, idx),
+                                            tf.cast(tf.shape(pred_codes_dense), tf.int64))
+
+        idx = tf.where(tf.not_equal(label_codes, 0))
+        label_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
+                                       tf.gather_nd(label_codes, idx),
+                                       tf.cast(tf.shape(label_codes), tf.int64))
+        label_sparse = tf.cast(label_sparse, tf.int64)
+
+        # Compute edit distance and total chars count
+        distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, label_sparse, normalize=False))
+        count_chars = tf.reduce_sum(true_sequence_length)
+
+        return tf.divide(tf.cast(distance, tf.int64), count_chars, name='CER')
+
     # Define model and compile it
-    model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=loss_ctc)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=training_parameters.learning_rate)
-    model.compile(loss={'ctc_loss': lambda i, j: j}, optimizer=optimizer)  # loss has already been added to the model
+    model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=net_output)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=parameters.learning_rate)
+    model.compile(#loss={'ctc_loss': lambda i, j: j},  # loss has already been added to the model
+                  loss=[warp_ctc_loss],
+                  optimizer=optimizer,
+                  metrics=[warp_cer_metric]
+                  )
+
+    return model
+
+
+def get_model_inference(parameters: Params,
+                        weights_dir: str=None):
+    h, w = parameters.input_shape
+    c = parameters.input_channels
+
+    input_images = Input(shape=(h, w, c), name='input_images')
+    input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
+
+    net_output = get_crnn_output(input_images, parameters)
+    output_seq_len = tf.identity(input_seq_len)  # need this op to pass it to output
+
+    model = Model(inputs=[input_images, input_seq_len], outputs=[net_output, output_seq_len])
+
+    if weights_dir:
+        model.load_weights(weights_dir)
 
     return model
