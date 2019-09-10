@@ -10,28 +10,6 @@ import pandas as pd
 from taputapu.io.image import get_image_shape_without_loading
 
 
-# def _discard_long_labels(labels,
-#                          maximum_length: int,
-#                          string_split_delimiter: str) -> list:
-#     """
-#     Discard samples that have a longer labels than ``maximum_length``
-#
-#     :param maximum_length: maximum characters per string
-#     :param string_split_delimiter:
-#     :return: updated csv_filename, same type as input
-#     """
-#     # Remove lables that are longer than maximum_length
-#     updated_labels = map(lambda x: re.sub(re.escape(string_split_delimiter), '', x), labels)
-#     updated_labels = [lb for lb, upd_lb in zip(labels, updated_labels) if len(upd_lb) <= maximum_length]
-#
-#     n_removed = len(labels) - len(updated_labels)
-#     if n_removed > 0:
-#         print('-- Removed {} samples ({:.2f} %) which label '
-#               'is longer than {} '.format(n_removed,
-#                                           100 * n_removed / len(labels),
-#                                           maximum_length))
-
-
 def _convert_label_to_dense_codes(labels,
                                   split_char: str,
                                   max_width: int,
@@ -69,7 +47,7 @@ def _compute_length_inputs(path, target_shape):
 
 def preprocess_csv(csv_filename: str,
                    parameters: Params,
-                   output_csv_filename: str) -> None:
+                   output_csv_filename: str) -> int:
     """
 
     :param csv_filename:
@@ -134,16 +112,16 @@ def preprocess_csv(csv_filename: str,
                          index=False,
                          escapechar="\\",
                          quoting=0)
+    return len(new_dataframe)
 
 
-def data_preprocessing(output_dir: str, params: Params) -> (str, str):
+def data_preprocessing(params: Params) -> (str, str, str, str):
     """
 
-    :param output_dir:
     :param params:
     :return:
     """
-
+    output_dir = os.path.join(params.output_model_dir, 'preprocessed')
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     else:
@@ -153,12 +131,12 @@ def data_preprocessing(output_dir: str, params: Params) -> (str, str):
     csv_eval_output = os.path.join(output_dir, 'updated_eval.csv')
 
     # Preprocess train csv
-    preprocess_csv(params.csv_files_train, params, csv_train_output)
+    n_samples_train = preprocess_csv(params.csv_files_train, params, csv_train_output)
 
     # Preprocess train csv
-    preprocess_csv(params.csv_files_eval, params, csv_eval_output)
+    n_samples_eval = preprocess_csv(params.csv_files_eval, params, csv_eval_output)
 
-    return csv_train_output, csv_eval_output
+    return csv_train_output, csv_eval_output, n_samples_train, n_samples_eval
 
 
 

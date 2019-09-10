@@ -53,6 +53,8 @@ class Alphabet:
             if 0 in self._codes:
                 raise ValueError('0 code is in the lookup table, you should''nt use it.')
 
+            self.lookup_int2str = dict(zip(self.codes, self.alphabet_units))
+
     def check_input_file_alphabet(self, csv_filenames: List[str],
                                   discarded_chars: str=';|{}'.format(string.whitespace[1:]),
                                   csv_delimiter: str=";") -> None:
@@ -137,47 +139,47 @@ class Alphabet:
         return self._alphabet_units
 
 
-class TrainingParams:
-    """
-    Object for parameters related to the training.
-
-    :ivar n_epochs: numbers of epochs to run the training (default: 50)
-    :vartype n_epochs: int
-    :ivar train_batch_size: batch size during training (default: 64)
-    :vartype train_batch_size: int
-    :ivar eval_batch_size: batch size during evaluation (default: 128)
-    :vartype eval_batch_size: int
-    :ivar learning_rate: initial learning rate (default: 1e-4)
-    :vartype learning_rate: float
-    :ivar learning_decay_rate: decay rate for exponential learning rate (default: .96)
-    :vartype learning_decay_rate: float
-    :ivar learning_decay_steps: decay steps for exponential learning rate (default: 1000)
-    :vartype learning_decay_steps: int
-    :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
-    :vartype evaluate_every_epoch: int
-    :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
-    :vartype save_interval: int
-    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
-    :vartype optimizer: str
-    """
-    def __init__(self, **kwargs):
-        self.n_epochs = kwargs.get('n_epochs', 50)
-        self.train_batch_size = kwargs.get('train_batch_size', 64)
-        self.eval_batch_size = kwargs.get('eval_batch_size', 128)
-        # Initial value of learining rate (exponential learning rate is used)
-        self.learning_rate = kwargs.get('learning_rate', 1e-4)
-        # Learning rate decay for exponential learning rate
-        self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
-        # Decay steps for exponential learning rate
-        self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
-        self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
-        self.save_interval = kwargs.get('save_interval', 1e3)
-        self.optimizer = kwargs.get('optimizer', 'adam')
-
-        assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
-
-    def to_dict(self) -> dict:
-        return self.__dict__
+# class TrainingParams:
+#     """
+#     Object for parameters related to the training.
+#
+#     :ivar n_epochs: numbers of epochs to run the training (default: 50)
+#     :vartype n_epochs: int
+#     :ivar train_batch_size: batch size during training (default: 64)
+#     :vartype train_batch_size: int
+#     :ivar eval_batch_size: batch size during evaluation (default: 128)
+#     :vartype eval_batch_size: int
+#     :ivar learning_rate: initial learning rate (default: 1e-4)
+#     :vartype learning_rate: float
+#     :ivar learning_decay_rate: decay rate for exponential learning rate (default: .96)
+#     :vartype learning_decay_rate: float
+#     :ivar learning_decay_steps: decay steps for exponential learning rate (default: 1000)
+#     :vartype learning_decay_steps: int
+#     :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
+#     :vartype evaluate_every_epoch: int
+#     :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
+#     :vartype save_interval: int
+#     :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
+#     :vartype optimizer: str
+#     """
+#     def __init__(self, **kwargs):
+#         self.n_epochs = kwargs.get('n_epochs', 50)
+#         self.train_batch_size = kwargs.get('train_batch_size', 64)
+#         self.eval_batch_size = kwargs.get('eval_batch_size', 128)
+#         # Initial value of learining rate (exponential learning rate is used)
+#         self.learning_rate = kwargs.get('learning_rate', 1e-4)
+#         # Learning rate decay for exponential learning rate
+#         self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
+#         # Decay steps for exponential learning rate
+#         self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
+#         self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
+#         self.save_interval = kwargs.get('save_interval', 1e3)
+#         self.optimizer = kwargs.get('optimizer', 'adam')
+#
+#         assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
+#
+#     def to_dict(self) -> dict:
+#         return self.__dict__
 
 
 class Params:
@@ -193,8 +195,6 @@ class Params:
     :vartype csv_delimiter: str
     :ivar string_split_delimiter: character that delimits each alphabet unit in the labels
     :vartype string_split_delimiter: str
-    :ivar num_gpus: number of gpus to use
-    :vartype num_gpus: int
     :ivar lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
     :vartype lookup_alphabet_file: str
     :ivar csv_files_train: csv filename which contains the (path;label) of each training sample
@@ -213,9 +213,24 @@ class Params:
     :vartype data_augmentation_max_rotation: float
     :ivar input_data_n_parallel_calls: number of parallel calls to make when using Dataset.map()
     :vartype input_data_n_parallel_calls: int
+    :ivar n_epochs: numbers of epochs to run the training (default: 50)
+    :vartype n_epochs: int
+    :ivar train_batch_size: batch size during training (default: 64)
+    :vartype train_batch_size: int
+    :ivar eval_batch_size: batch size during evaluation (default: 128)
+    :vartype eval_batch_size: int
+    :ivar learning_rate: initial learning rate (default: 1e-4)
+    :vartype learning_rate: float
+    :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
+    :vartype evaluate_every_epoch: int
+    :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
+    :vartype save_interval: int
+    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
+    :vartype optimizer: str
     """
     # TODO add additinal params to doc
     def __init__(self, **kwargs):
+        # model params
         self.input_shape = kwargs.get('input_shape', (32, 100))
         self.input_channels = kwargs.get('input_channels', 1)
         self.cnn_features_list = kwargs.get('cnn_features_list', [16, 16, 32, 32])
@@ -225,20 +240,30 @@ class Params:
         self.cnn_pool_strides = kwargs.get('cnn_pool_strides', [(2, 2), (2, 2), (2, 2), (2, 2)])
         self.cnn_batch_norm = kwargs.get('cnn_batch_norm', [False, False, False, False])
         self.rnn_units = kwargs.get('rnn_units', [256, 256, 256])
+        self._keep_prob_dropout = kwargs.get('keep_prob', 0.5)
+        self.num_beam_paths = kwargs.get('num_beam_paths', 3)
+        # csv params
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
         self.string_split_delimiter = kwargs.get('string_split_delimiter', '|')
+        self.csv_files_train = kwargs.get('csv_files_train')
+        self.csv_files_eval = kwargs.get('csv_files_eval')
+        # alphabet params
         self.blank_symbol = kwargs.get('blank_symbol', '$')
         self.max_chars_per_string = kwargs.get('max_chars_per_string', 75)
         self.lookup_alphabet_file = kwargs.get('lookup_alphabet_file')
-        self.csv_files_train = kwargs.get('csv_files_train')
-        self.csv_files_eval = kwargs.get('csv_files_eval')
-        self.output_model_dir = kwargs.get('output_model_dir')
-        self._keep_prob_dropout = kwargs.get('keep_prob', 0.5)
-        self.num_beam_paths = kwargs.get('num_beam_paths', 3)
+        # data augmentation params
         self.data_augmentation = kwargs.get('data_augmentation', True),
         self.data_augmentation_max_rotation = kwargs.get('data_augmentation_max_rotation', 0.05)
         self.data_augmentation_max_slant = kwargs.get('data_augmentation_max_slant', 0.7)
-        self.num_gpus = kwargs.get('num_gpus', 1)
+        # training params
+        self.n_epochs = kwargs.get('n_epochs', 50)
+        self.train_batch_size = kwargs.get('train_batch_size', 64)
+        self.eval_batch_size = kwargs.get('eval_batch_size', 128)
+        self.learning_rate = kwargs.get('learning_rate', 1e-4)
+        self.optimizer = kwargs.get('optimizer', 'adam')
+        self.output_model_dir = kwargs.get('output_model_dir')
+        self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
+        self.save_interval = kwargs.get('save_interval', 1e3)
 
         self._assign_alphabet()
 
@@ -252,6 +277,8 @@ class Params:
                                                        "equal to {} but is {}".format(self.max_chars_per_string,
                                                                                       max_input_width,
                                                                                       self.input_shape[1])
+
+        assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
 
     def show_experiment_params(self) -> dict:
         """
@@ -271,6 +298,9 @@ class Params:
     def keep_prob_dropout(self, value):
         assert (0.0 < value <= 1.0), 'Must be 0.0 < value <= 1.0'
         self._keep_prob_dropout = value
+
+    def to_dict(self) -> dict:
+        return self.__dict__
 
 
 def import_params_from_json(model_directory: str=None, json_filename: str=None) -> dict:
