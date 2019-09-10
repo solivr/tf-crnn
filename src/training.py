@@ -2,45 +2,67 @@
 __author__ = "solivr"
 __license__ = "GPL"
 
-from .model import CRNNModel
 from .config import Params
+from src.model import get_model_train
+from src.preprocessing import data_preprocessing
+from src.data_handler import dataset_generator
 import tensorflow as tf
-from tensorflow.keras.layers import Input
+import numpy as np
+import time
+import os
 
 
 def training(parameters: Params):
+    # parameters = Params(input_shape=[128, 1800],
+    #                     lookup_alphabet_file='/home/soliveir/crnn_benchmark/tf-crnn/data/alphabet/lookup_iam.json',
+    #                     csv_files_train='/scratch/sofia/DT_IAM/csv_experiments/iam_lines_train_tf_format.csv',
+    #                     csv_files_eval='/scratch/sofia/DT_IAM/csv_experiments/iam_lines_validation1_tf_format.csv',
+    #                     num_beam_paths=1,
+    #                     cnn_batch_norm=5 * [True],
+    #                     max_chars_per_string=80,
+    #                     learning_rate=1e-4,
+    #                     train_batch_size=128,
+    #                     eval_batch_size=128)
 
-    h, w = parameters.input_shape
-    c = parameters.input_channels
-    data_imgs = Input(shape=(h, w, c), name='input_images')
-    data_labels = Input(shape=[], dtype=tf.string, name='labels')
-    seq_len_inputs = Input(shape=[], dtype=tf.int32, name='input_widths')
+    # check if output folder already exists
+    assert parameters.output_model_dir, \
+        '{} already exists, you cannot use it as output directory.'.format(parameters.output_model_dir)
+        # 'Set "restore_model=True" to continue training, or delete dir "rm -r {0}"'.format(parameters.output_model_dir)
+    os.makedirs(parameters.output_model_dir)
 
-    crnn_model = CRNNModel(dense_output_dims=parameters.alphabet.n_classes)
-    net_output = crnn_model(data_imgs, training=True)
+    # data and csv preprocessing
+    csv_train_file, csv_eval_file, \
+    n_samples_train, n_samples_eval = data_preprocessing(parameters)
 
-    # Alphabet and codes
-    keys_alphabet_units = parameters.alphabet.alphabet_units
-    values_alphabet_codes = parameters.alphabet.codes
-    table_str2int = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(keys_alphabet_units, values_alphabet_codes), -1)
+    # Get model
+    model = get_model_train(parameters)
 
-    # Get labels formatted
-    labels_splited = tf.string_split(data_labels, delimiter=parameters.string_split_delimiter)
-    codes = table_str2int.lookup(labels_splited.values)
-    sparse_code_target = tf.SparseTensor(labels_splited.indices, codes, labels_splited.dense_shape)
+    # Get datasets
+    dataset_train = dataset_generator([csv_train_file],
+                                      parameters,
+                                      batch_size=parameters.train_batch_size,
+                                      data_augmentation=parameters.data_augmentation,
+                                      num_epochs=parameters.n_epochs)
 
-    seq_len_labels = tf.math.bincount(tf.cast(sparse_code_target.indices[:, 0], tf.int32),
-                                      minlength=tf.shape(net_output)[1])
+    dataset_eval = dataset_generator([csv_eval_file],
+                                     parameters,
+                                     batch_size=parameters.eval_batch_size,
+                                     data_augmentation=False,
+                                     num_epochs=parameters.n_epochs)
 
-    # Add CTC loss to model
-    ctc_loss = tf.nn.ctc_loss_v2(logits=net_output,
-                                 labels=tf.sparse.to_dense(sparse_code_target, default_value=-1),
-                                 label_length=seq_len_labels,
-                                 logit_length=seq_len_inputs,
-                                 logits_time_major=False)
+    # Create callbacks
+    logdir = os.path.join(parameters.output_model_dir, 'logs')
+    tb_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
 
-    crnn_model.add_loss(ctc_loss)
+    # Train model
+    model.fit(dataset_train,
+              epochs=parameters.n_epochs,
+              steps_per_epoch=np.floor(n_samples_train / parameters.train_batch_size),
+              validation_data=dataset_eval,
+              validation_steps=np.floor(n_samples_eval / parameters.eval_batch_size),
+              callbacks=[tb_callback])
 
-    crnn_model.compile(optimizer='adam')
+    # Save weights
+    save_dir = os.path.join(parameters.output_model_dir, 'saved_weights', int(time.time()))
+    model.save_weights(save_dir, save_format='tf')
 
