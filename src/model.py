@@ -42,6 +42,10 @@ class ConvBlock(Layer):
         x = tf.nn.relu(x)
         return x
 
+    def get_config(self):
+        config = super(ConvBlock, self).get_config()
+        return config
+
 
 class CERMetric(Metric):
     def __init__(self):
@@ -109,7 +113,8 @@ def get_crnn_output(input_images, parameters: Params=None):
     return net_output
 
 
-def get_model_train(parameters: Params):
+def get_model_train(parameters: Params,
+                    file_writer=None):
 
     h, w = parameters.input_shape
     c = parameters.input_channels
@@ -117,23 +122,22 @@ def get_model_train(parameters: Params):
     input_images = Input(shape=(h, w, c), name='input_images')
     input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
 
+    # if file_writer:
+    #     with file_writer.as_default():
+    #         tf.summary.image('augmented data', input_images, max_outputs=2)
+
     label_codes = Input(shape=(parameters.max_chars_per_string), dtype=tf.int32, name='label_codes')
     label_seq_length = Input(shape=[1], dtype='int64', name='label_seq_length')
 
     net_output = get_crnn_output(input_images, parameters)
 
-    # Loss
-    # def _ctc_loss_fn(args):
-    #     preds, label_codes, input_length, label_length = args
-    #     return ctc_batch_cost(label_codes, preds, input_length, label_length)
-    # loss_ctc = Lambda(_ctc_loss_fn, output_shape=(1,), name='ctc_loss')(
-    #     [net_output, label_codes, input_seq_len, label_seq_length])
+    # Loss function
     def warp_ctc_loss(y_true, y_pred):
         return ctc_batch_cost(label_codes, y_pred, input_seq_len, label_seq_length)
 
     # tf.summary.scalar('loss', tf.reduce_mean(loss_ctc))
 
-    # Metric
+    # Metric function
     def warp_cer_metric(y_true, y_pred):
         pred_sequence_length, true_sequence_length = input_seq_len, label_seq_length
 
@@ -162,11 +166,10 @@ def get_model_train(parameters: Params):
     # Define model and compile it
     model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=net_output)
     optimizer = tf.keras.optimizers.Adam(learning_rate=parameters.learning_rate)
-    model.compile(#loss={'ctc_loss': lambda i, j: j},  # loss has already been added to the model
-                  loss=[warp_ctc_loss],
+    model.compile(loss=[warp_ctc_loss],
                   optimizer=optimizer,
-                  metrics=[warp_cer_metric]
-                  )
+                  metrics=[warp_cer_metric],
+                  experimental_run_tf_function=False)
 
     return model
 

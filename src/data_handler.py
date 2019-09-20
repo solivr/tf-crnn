@@ -3,13 +3,18 @@ __author__ = 'solivr'
 __license__ = "GPL"
 
 import tensorflow as tf
-import numpy as np
+from tensorflow_addons.image.transform_ops import rotate
 from .config import Params, CONST
 from typing import Tuple, Union, List
 import collections
+import numpy as np
+import cv2
 
 
-def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) -> tf.Tensor:  # adapted from SeguinBe
+def random_rotation(img: tf.Tensor,
+                    max_rotation: float=0.1,
+                    crop: bool=True,
+                    minimum_width: int=0) -> tf.Tensor:  # adapted from SeguinBe
     """
     Rotates an image with a random angle.
     See https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders for formulae
@@ -17,11 +22,14 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
     :param img: Tensor
     :param max_rotation: maximum angle to rotate (radians)
     :param crop: boolean to crop or not the image after rotation
+    :param minimum_width: minimum width of image after data augmentation
     :return:
     """
     with tf.name_scope('RandomRotation'):
-        rotation = tf.random_uniform([], -max_rotation, max_rotation, name='pick_random_angle')
-        rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
+        rotation = tf.random.uniform([], -max_rotation, max_rotation, name='pick_random_angle')
+        # rotated_image = tf.contrib.image.rotate(img, rotation, interpolation='BILINEAR')
+        rotated_image = rotate(tf.expand_dims(img, axis=0), rotation, interpolation='BILINEAR')
+        rotated_image = tf.squeeze(rotated_image, axis=0)
         if crop:
             rotation = tf.abs(rotation)
             original_shape = tf.shape(rotated_image)[:2]
@@ -43,7 +51,7 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
             # rotated_image_crop = rotated_image[bb_begin[0]:h - bb_begin[0], bb_begin[1]:w - bb_begin[1], :]
 
             # If crop removes the entire image, keep the original image
-            rotated_image = tf.cond(tf.equal(tf.size(rotated_image_crop), 0),
+            rotated_image = tf.cond(tf.less_equal(tf.shape(rotated_image_crop)[1], minimum_width),
                                     true_fn=lambda: img,
                                     false_fn=lambda: rotated_image_crop,
                                     name='check_size_crop')
@@ -51,41 +59,44 @@ def random_rotation(img: tf.Tensor, max_rotation: float=0.1, crop: bool=True) ->
         return rotated_image
 
 
-def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.Tensor:
-    """
-    Given an image will pad its border adding a random number of rows and columns
+# def random_padding(image: tf.Tensor, max_pad_w: int=5, max_pad_h: int=10) -> tf.Tensor:
+#     """
+#     Given an image will pad its border adding a random number of rows and columns
+#
+#     :param image: image to pad
+#     :param max_pad_w: maximum padding in width
+#     :param max_pad_h: maximum padding in height
+#     :return: a padded image
+#     """
+#     # TODO specify image shape in doc
+#
+#     w_pad = list(np.random.randint(0, max_pad_w, size=[2]))
+#     h_pad = list(np.random.randint(0, max_pad_h, size=[2]))
+#     paddings = [h_pad, w_pad, [0, 0]]
+#
+#     return tf.pad(image, paddings, mode='REFLECT', name='random_padding')
 
-    :param image: image to pad
-    :param max_pad_w: maximum padding in width
-    :param max_pad_h: maximum padding in height
-    :return: a padded image
-    """
-    # TODO specify image shape in doc
 
-    w_pad = list(np.random.randint(0, max_pad_w, size=[2]))
-    h_pad = list(np.random.randint(0, max_pad_h, size=[2]))
-    paddings = [h_pad, w_pad, [0, 0]]
-
-    return tf.pad(image, paddings, mode='REFLECT', name='random_padding')
-
-
-def augment_data(image: tf.Tensor, max_rotation: float=0.1) -> tf.Tensor:
+def augment_data(image: tf.Tensor,
+                 max_rotation: float=0.1,
+                 minimum_width: int=0) -> tf.Tensor:
     """
     Data augmentation on an image (padding, brightness, contrast, rotation)
 
     :param image: Tensor
     :param max_rotation: float, maximum permitted rotation (in radians)
+    :param minimum_width: minimum width of image after data augmentation
     :return: Tensor
     """
     with tf.name_scope('DataAugmentation'):
 
         # Random padding
-        image = random_padding(image)
+        # image = random_padding(image)
 
         # TODO : add random scaling
         image = tf.image.random_brightness(image, max_delta=0.1)
         image = tf.image.random_contrast(image, 0.5, 1.5)
-        image = random_rotation(image, max_rotation, crop=True)
+        image = random_rotation(image, max_rotation, crop=True, minimum_width=minimum_width)
 
         if image.shape[-1] >= 3:
             image = tf.image.random_hue(image, 0.2)
@@ -93,7 +104,7 @@ def augment_data(image: tf.Tensor, max_rotation: float=0.1) -> tf.Tensor:
 
         return image
 
-
+@tf.function
 def get_resized_width(image: tf.Tensor,
                       target_height: int,
                       increment: int=CONST.DIMENSION_REDUCTION_W_POOLING):
@@ -104,12 +115,13 @@ def get_resized_width(image: tf.Tensor,
     new_width = tf.cast(tf.round((image_ratio * target_height) / increment) * increment, tf.int32)
     f1 = lambda: (new_width, image_ratio)
     f2 = lambda: (target_height, tf.constant(1.0, dtype=tf.float64))
-    new_width, image_ratio = tf.case({tf.greater(new_width, 0): f1,
-                                      tf.less_equal(new_width, 0): f2},
-                                     default=f1, exclusive=True)
-    return new_width, image_ratio
+    if tf.math.less_equal(new_width, 0):
+        return f2()
+    else:
+        return f1()
 
 
+@tf.function
 def padding_inputs_width(image: tf.Tensor,
                          target_shape: Tuple[int, int],
                          increment: int) -> Tuple[tf.Tensor, tf.Tensor]:
@@ -139,7 +151,7 @@ def padding_inputs_width(image: tf.Tensor,
         with tf.name_scope('mirror_padding'):
             pad = tf.subtract(target_w, new_w)
 
-            img_resized = tf.image.resize_images(image, [new_h, new_w])
+            img_resized = tf.image.resize(image, [new_h, new_w])
 
             # Padding to have the desired width
             paddings = [[0, 0], [0, pad], [0, 0]]
@@ -152,7 +164,7 @@ def padding_inputs_width(image: tf.Tensor,
 
     def replicate_fn():
         with tf.name_scope('replication_padding'):
-            img_resized = tf.image.resize_images(image, [new_h, new_w])
+            img_resized = tf.image.resize(image, [new_h, new_w])
 
             # If one symmetry is not enough to have a full width
             # Count number of replications needed
@@ -168,37 +180,71 @@ def padding_inputs_width(image: tf.Tensor,
 
     def simple_resize():
         with tf.name_scope('simple_resize'):
-            img_resized = tf.image.resize_images(image, target_shape)
+            img_resized = tf.image.resize(image, target_shape)
 
             img_resized.set_shape([target_shape[0], target_shape[1], img_resized.get_shape()[2]])
 
             return img_resized, tuple(target_shape)
 
-    # 3 cases
-    pad_image, (new_h, new_w) = tf.case(
-        {  # case 1 : new_w >= target_w
-            tf.logical_and(tf.greater_equal(ratio, target_ratio),
-                           tf.greater_equal(new_w, target_w)): simple_resize,
-            # case 2 : new_w >= target_w/2 & new_w < target_w & ratio < target_ratio
-            tf.logical_and(tf.less(ratio, target_ratio),
-                           tf.logical_and(tf.greater_equal(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)),
-                                          tf.less(new_w, target_w))): pad_fn,
-            # case 3 : new_w < target_w/2 & new_w < target_w & ratio < target_ratio
-            tf.logical_and(tf.less(ratio, target_ratio),
-                           tf.logical_and(tf.less(new_w, target_w),
-                                          tf.less(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)))): replicate_fn
-        },
-        default=simple_resize, exclusive=True)
+    # case 1 : new_w >= target_w
+    if tf.logical_and(tf.greater_equal(ratio, target_ratio), tf.greater_equal(new_w, target_w)):
+            pad_image, (new_h, new_w) =  simple_resize()
+    # case 2 : new_w >= target_w/2 & new_w < target_w & ratio < target_ratio
+    elif tf.logical_and(tf.less(ratio, target_ratio),
+                        tf.logical_and(tf.greater_equal(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)),
+                                       tf.less(new_w, target_w))):
+        pad_image, (new_h, new_w) = pad_fn()
+    # case 3 : new_w < target_w/2 & new_w < target_w & ratio < target_ratio
+    elif tf.logical_and(tf.less(ratio, target_ratio),
+                        tf.logical_and(tf.less(new_w, target_w),
+                                       tf.less(new_w, tf.cast(tf.divide(target_w, 2), tf.int32)))):
+        pad_image, (new_h, new_w) = replicate_fn()
+    else:
+        pad_image, (new_h, new_w) = simple_resize()
 
-    return pad_image, new_w  # new_w = image width used for computing sequence lengths
+    return pad_image, new_w
+
+
+def apply_slant(image: np.ndarray, alpha: np.ndarray) -> (np.ndarray, np.ndarray):
+    alpha = alpha[0]
+
+    def _find_background_color(image: np.ndarray) -> int:
+        """
+        Given a grayscale image, finds the background color value
+        :param image: grayscale image
+        :return: background color value (int)
+        """
+        # Otsu's thresholding after Gaussian filtering
+        blur = cv2.GaussianBlur(image[:, :, 0].astype(np.uint8), (5, 5), 0)
+        thresh_value, thresholded_image = cv2.threshold(blur.astype(np.uint8), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Find which is the background (0 or 255). Supposing that the background color occurrence is higher
+        # than the writing color
+        counts, bin_edges = np.histogram(thresholded_image, bins=2)
+        background_color = int(np.median(image[thresholded_image == 255 * np.argmax(counts)]))
+
+        return background_color
+
+    shape_image = image.shape
+    shift = max(-alpha * shape_image[0], 0)
+    output_size = (int(shape_image[1] + np.ceil(abs(alpha * shape_image[0]))), int(shape_image[0]))
+
+    warpM = np.array([[1, alpha, shift], [0, 1, 0]])
+
+    # Find color of background in order to replicate it in the borders
+    border_value = _find_background_color(image)
+
+    image_warp = cv2.warpAffine(image, np.array(warpM), output_size, borderValue=border_value)
+
+    return image_warp, np.array(output_size)
 
 
 def dataset_generator(csv_filename: Union[List[str], str],
-                       params: Params,
-                       labels: bool=True,
-                       batch_size: int=64,
-                       data_augmentation: bool=False,
-                       num_epochs: int=None):
+                      params: Params,
+                      labels: bool=True,
+                      batch_size: int=64,
+                      data_augmentation: bool=False,
+                      num_epochs: int=None):
     do_padding = True
 
     if labels:
@@ -238,24 +284,38 @@ def dataset_generator(csv_filename: Union[List[str], str],
 
     dataset = tf.data.Dataset.from_tensor_slices(csv_filename)
     # Read files sequentially (if num_parallel_reads=1) or in parallel
-    dataset = dataset.apply(tf.data.experimental.parallel_interleave(filename_to_dataset,
-                                                                     cycle_length=num_parallel_reads))
+    # dataset = dataset.apply(tf.data.experimental.parallel_interleave(filename_to_dataset,
+    #                                                                  cycle_length=num_parallel_reads))
+    dataset = dataset.interleave(filename_to_dataset, cycle_length=num_parallel_reads,
+                                 num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(map_fn)
     # -----
 
-    def _load_image_and_pad_or_resize(features, labels):
+    def _load_image(features: dict, labels):
         path = features['paths']
         image_content = tf.io.read_file(path)
         image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
                                   try_recover_truncated=True, name='image_decoding_op')
 
+        return {'input_images': image,
+                'label_seq_length': features['label_seq_length']}, labels
+
+    def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
+        image = features['input_images']
+        image = augment_data(image, params.data_augmentation_max_rotation, minimum_width=params.max_chars_per_string)
+
+        features.update({'input_images': image})
+        return features, label
+
+    def _pad_image_or_resize(features: dict, labels):
+        image = features['input_images']
         if do_padding:
             with tf.name_scope('do_padding'):
                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
                                                         increment=CONST.DIMENSION_REDUCTION_W_POOLING)
         # Resize
         else:
-            image = tf.image.resize_images(image, size=params.input_shape)
+            image = tf.image.resize(image, size=params.input_shape)
             img_width = tf.shape(image)[1]
 
         input_seq_length = tf.cast(tf.floor(tf.divide(img_width, params.n_pool)), tf.int32)
@@ -267,25 +327,19 @@ def dataset_generator(csv_filename: Union[List[str], str],
                     'label_seq_length': features['label_seq_length'],
                     'input_seq_length': input_seq_length}, labels
 
-    def _format_label_codes(features, string_label_codes):
-        splits = tf.sparse.to_dense(tf.strings.split([string_label_codes], sep=' '))
+    def _format_label_codes(features: dict, string_label_codes):
+        splits = tf.strings.split([string_label_codes], sep=' ')
         label_codes = tf.squeeze(tf.strings.to_number(splits, out_type=tf.int32), axis=0)
 
         features.update({'label_codes': label_codes})
         return features, [0]
 
-    def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
-
-        image = features['input_images']
-        image = augment_data(image, params.data_augmentation_max_rotation)
-
-        features.update({'input_images': image})
-        return features, label
-
-    dataset = dataset.map(_load_image_and_pad_or_resize)
-    dataset = dataset.map(_format_label_codes)
+    #  1. load image 2. data augmentation 3. padding
+    dataset = dataset.map(_load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     if data_augmentation:
         dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(_format_label_codes, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.shuffle(1024, reshuffle_each_iteration=False).repeat(num_epochs)
 
     return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)

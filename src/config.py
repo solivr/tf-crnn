@@ -139,49 +139,6 @@ class Alphabet:
         return self._alphabet_units
 
 
-# class TrainingParams:
-#     """
-#     Object for parameters related to the training.
-#
-#     :ivar n_epochs: numbers of epochs to run the training (default: 50)
-#     :vartype n_epochs: int
-#     :ivar train_batch_size: batch size during training (default: 64)
-#     :vartype train_batch_size: int
-#     :ivar eval_batch_size: batch size during evaluation (default: 128)
-#     :vartype eval_batch_size: int
-#     :ivar learning_rate: initial learning rate (default: 1e-4)
-#     :vartype learning_rate: float
-#     :ivar learning_decay_rate: decay rate for exponential learning rate (default: .96)
-#     :vartype learning_decay_rate: float
-#     :ivar learning_decay_steps: decay steps for exponential learning rate (default: 1000)
-#     :vartype learning_decay_steps: int
-#     :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
-#     :vartype evaluate_every_epoch: int
-#     :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
-#     :vartype save_interval: int
-#     :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
-#     :vartype optimizer: str
-#     """
-#     def __init__(self, **kwargs):
-#         self.n_epochs = kwargs.get('n_epochs', 50)
-#         self.train_batch_size = kwargs.get('train_batch_size', 64)
-#         self.eval_batch_size = kwargs.get('eval_batch_size', 128)
-#         # Initial value of learining rate (exponential learning rate is used)
-#         self.learning_rate = kwargs.get('learning_rate', 1e-4)
-#         # Learning rate decay for exponential learning rate
-#         self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
-#         # Decay steps for exponential learning rate
-#         self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
-#         self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
-#         self.save_interval = kwargs.get('save_interval', 1e3)
-#         self.optimizer = kwargs.get('optimizer', 'adam')
-#
-#         assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
-#
-#     def to_dict(self) -> dict:
-#         return self.__dict__
-
-
 class Params:
     """
     Object for general parameters
@@ -223,23 +180,24 @@ class Params:
     :vartype learning_rate: float
     :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
     :vartype evaluate_every_epoch: int
-    :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
+    :ivar save_interval: save the model every 'save_interval' epoch (default: 10)
     :vartype save_interval: int
     :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
     :vartype optimizer: str
+    :ivar restore_model: boolean to continue training with saved weights
+    :vartype restore_model: bool
     """
-    # TODO add additinal params to doc
     def __init__(self, **kwargs):
         # model params
-        self.input_shape = kwargs.get('input_shape', (32, 100))
+        self.input_shape = kwargs.get('input_shape', (96, 1400))
         self.input_channels = kwargs.get('input_channels', 1)
-        self.cnn_features_list = kwargs.get('cnn_features_list', [16, 16, 32, 32])
-        self.cnn_kernel_size = kwargs.get('cnn_kernel_size', [3, 3, 3, 3])
-        self.cnn_stride_size = kwargs.get('cnn_stride_size', [(1, 1), (1, 1), (1, 1), (1, 1)])
-        self.cnn_pool_size = kwargs.get('cnn_pool_size', [(2, 2), (2, 2), (2, 2), (2, 2)])
-        self.cnn_pool_strides = kwargs.get('cnn_pool_strides', [(2, 2), (2, 2), (2, 2), (2, 2)])
-        self.cnn_batch_norm = kwargs.get('cnn_batch_norm', [False, False, False, False])
-        self.rnn_units = kwargs.get('rnn_units', [256, 256, 256])
+        self.cnn_features_list = kwargs.get('cnn_features_list', [16, 32, 64, 96, 128])
+        self.cnn_kernel_size = kwargs.get('cnn_kernel_size', [3, 3, 3, 3, 3])
+        self.cnn_stride_size = kwargs.get('cnn_stride_size', [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1)])
+        self.cnn_pool_size = kwargs.get('cnn_pool_size', [(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
+        self.cnn_pool_strides = kwargs.get('cnn_pool_strides', [(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
+        self.cnn_batch_norm = kwargs.get('cnn_batch_norm', [False, False, False, False, False])
+        self.rnn_units = kwargs.get('rnn_units', [256, 256])
         self._keep_prob_dropout = kwargs.get('keep_prob', 0.5)
         self.num_beam_paths = kwargs.get('num_beam_paths', 3)
         # csv params
@@ -253,7 +211,7 @@ class Params:
         self.lookup_alphabet_file = kwargs.get('lookup_alphabet_file')
         # data augmentation params
         self.data_augmentation = kwargs.get('data_augmentation', True),
-        self.data_augmentation_max_rotation = kwargs.get('data_augmentation_max_rotation', 0.05)
+        self.data_augmentation_max_rotation = kwargs.get('data_augmentation_max_rotation', 0.005)
         self.data_augmentation_max_slant = kwargs.get('data_augmentation_max_slant', 0.7)
         # training params
         self.n_epochs = kwargs.get('n_epochs', 50)
@@ -261,24 +219,32 @@ class Params:
         self.eval_batch_size = kwargs.get('eval_batch_size', 128)
         self.learning_rate = kwargs.get('learning_rate', 1e-4)
         self.optimizer = kwargs.get('optimizer', 'adam')
-        self.output_model_dir = kwargs.get('output_model_dir')
+        self.output_model_dir = kwargs.get('output_model_dir', '')
         self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
-        self.save_interval = kwargs.get('save_interval', 1e3)
+        self.save_interval = kwargs.get('save_interval', 20)
+        self.restore_model = kwargs.get('restore_model', False)
 
         self._assign_alphabet()
 
-        cnn_params = zip(self.cnn_pool_size, self.cnn_pool_strides, self.cnn_stride_size)
-        self.n_pool = reduce(lambda i, j: i + j, map(lambda k: k[0][1] * k[1][1] * k[2][1], cnn_params))
+        # TODO compute n_pool correctly, this is missing cnn_pool_stride
+        cnn_params = zip(self.cnn_pool_size, self.cnn_stride_size)
+        self.n_pool = reduce(lambda i, j: i*j, map(lambda k: k[0][1] * k[1][1], cnn_params))
 
         # TODO add additional checks for the architecture
+        assert len(self.cnn_features_list) == len(self.cnn_kernel_size) == len(self.cnn_stride_size) \
+               == len(self.cnn_pool_size) == len(self.cnn_pool_strides) == len(self.cnn_batch_norm), \
+            "Length of parameters of model are not the same, check that all the layers parameters have the same length."
 
-        max_input_width = (self.max_chars_per_string + 1) * CONST.DIMENSION_REDUCTION_W_POOLING
-        assert max_input_width <= self.input_shape[1], "Maximum length of labels is {}, input width should be lower or " \
+        max_input_width = (self.max_chars_per_string + 1) * self.n_pool
+        assert max_input_width <= self.input_shape[1], "Maximum length of labels is {}, input width should be greater or " \
                                                        "equal to {} but is {}".format(self.max_chars_per_string,
                                                                                       max_input_width,
                                                                                       self.input_shape[1])
 
         assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
+
+        if os.path.isdir(self.output_model_dir):
+            print('WARNING : The output directory {} already exists.'.format(self.output_model_dir))
 
     def show_experiment_params(self) -> dict:
         """
@@ -300,7 +266,9 @@ class Params:
         self._keep_prob_dropout = value
 
     def to_dict(self) -> dict:
-        return self.__dict__
+        new_dict = self.__dict__.copy()
+        del new_dict['alphabet']
+        return new_dict
 
 
 def import_params_from_json(model_directory: str=None, json_filename: str=None) -> dict:
