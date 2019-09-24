@@ -4,7 +4,6 @@ __license__ = "GPL"
 
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.metrics import Metric
 from tensorflow.keras.backend import ctc_batch_cost, ctc_decode
 from tensorflow.keras.layers import Layer, Conv2D, BatchNormalization, MaxPool2D, Input, Permute, \
     Reshape, Bidirectional, LSTM, Dense, Softmax, Lambda
@@ -20,8 +19,9 @@ class ConvBlock(Layer):
                  cnn_padding: str,
                  pool_size: Tuple[int, int],
                  pool_strides: Tuple[int, int],
-                 batchnorm: bool):
-        super(ConvBlock, self).__init__()
+                 batchnorm: bool,
+                 **kwargs):
+        super(ConvBlock, self).__init__(**kwargs)
         self.conv = Conv2D(features,
                            kernel_size,
                            strides=stride,
@@ -33,6 +33,15 @@ class ConvBlock(Layer):
                               strides=pool_strides,
                               padding='same')
 
+        # for config purposes
+        self._features = features
+        self._kernel_size = kernel_size
+        self._stride = stride
+        self._cnn_padding = cnn_padding
+        self._pool_size = pool_size
+        self._pool_strides = pool_strides
+        self._batchnorm = batchnorm
+
     def call(self, inputs, training=False):
         x = self.conv(inputs)
         if self.bn is not None:
@@ -43,36 +52,45 @@ class ConvBlock(Layer):
         return x
 
     def get_config(self):
-        config = super(ConvBlock, self).get_config()
-        return config
+        super_config = super(ConvBlock, self).get_config()
+        config = {
+            'features': self._features,
+            'kernel_size': self._kernel_size,
+            'stride': self._stride,
+            'cnn_padding': self._cnn_padding,
+            'pool_size': self._pool_size,
+            'pool_strides': self._pool_strides,
+            'batchnorm': self._batchnorm
+        }
+        return dict(list(super_config.items()) + list(config.items()))
 
 
-class CERMetric(Metric):
-    def __init__(self):
-        super(CERMetric, self).__init__()
-
-        self.distance = self.add_weight('distance')
-        self.count_chars = self.add_weight('count_chars')
-
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        # y_pred needs to be decoded (its the logits)
-        pred_codes_dense = ctc_decode(y_pred, pred_sequence_length, greedy=True)
-
-        # create a sparse tensor
-        idx = tf.where(tf.not_equal(pred_codes_dense, -1))
-        pred_codes_sparse = tf.SparseTensor(idx, tf.gather_nd(pred_codes_dense, idx), pred_codes_dense.get_shape())
-
-        distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, y_true, normalize=False))
-        self.distance.assign_add(distance)
-
-        self.count_chars.assign_add(tf.reduce_sum(true_sequence_length))
-
-    def result(self):
-        return tf.divide(self.distance, self.count_chars) if tf.greater(self.count_chars, 0) else 1.0
-
-    def reset_states(self):
-        self.distance.assign(0)
-        self.count_chars.assign(0)
+# class CERMetric(Metric):
+#     def __init__(self):
+#         super(CERMetric, self).__init__()
+#
+#         self.distance = self.add_weight('distance')
+#         self.count_chars = self.add_weight('count_chars')
+#
+#     def update_state(self, y_true, y_pred, sample_weight=None):
+#         # y_pred needs to be decoded (its the logits)
+#         pred_codes_dense = ctc_decode(y_pred, pred_sequence_length, greedy=True)
+#
+#         # create a sparse tensor
+#         idx = tf.where(tf.not_equal(pred_codes_dense, -1))
+#         pred_codes_sparse = tf.SparseTensor(idx, tf.gather_nd(pred_codes_dense, idx), pred_codes_dense.get_shape())
+#
+#         distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, y_true, normalize=False))
+#         self.distance.assign_add(distance)
+#
+#         self.count_chars.assign_add(tf.reduce_sum(true_sequence_length))
+#
+#     def result(self):
+#         return tf.divide(self.distance, self.count_chars) if tf.greater(self.count_chars, 0) else 1.0
+#
+#     def reset_states(self):
+#         self.distance.assign(0)
+#         self.count_chars.assign(0)
 
 
 def get_crnn_output(input_images, parameters: Params=None):
@@ -114,7 +132,7 @@ def get_crnn_output(input_images, parameters: Params=None):
 
 
 def get_model_train(parameters: Params,
-                    file_writer=None):
+                    model_path: str=None):
 
     h, w = parameters.input_shape
     c = parameters.input_channels
@@ -163,13 +181,19 @@ def get_model_train(parameters: Params,
 
         return tf.divide(tf.cast(distance, tf.int64), count_chars, name='CER')
 
+    if model_path:
+        model = tf.keras.models.load_model(model_path, custom_objects={'ConvBlock': ConvBlock,
+                                                                       'warp_ctc_loss': warp_ctc_loss,
+                                                                       'warp_cer_metric': warp_cer_metric})
+        return model
+
     # Define model and compile it
-    model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=net_output)
+    model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=net_output, name='CRNN')
     optimizer = tf.keras.optimizers.Adam(learning_rate=parameters.learning_rate)
     model.compile(loss=[warp_ctc_loss],
                   optimizer=optimizer,
                   metrics=[warp_cer_metric],
-                  experimental_run_tf_function=False)
+                  experimental_run_tf_function=False) # TODO this is set to true by default but does not seem to work...
 
     return model
 

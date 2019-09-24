@@ -25,8 +25,9 @@ def training(_config: dict):
     export_config_filename =  os.path.join(parameters.output_model_dir, 'config.json')
     export_architecture_filename = os.path.join(parameters.output_model_dir, 'architecture.json')
 
-    saveweights_dir = os.path.join(parameters.output_model_dir, 'saved_weights')
-    savemodel_dir = os.path.join(parameters.output_model_dir, 'saved_model')
+    # saveweights_dir = os.path.join(parameters.output_model_dir, 'saved_weights')
+    # savemodel_dir = os.path.join(parameters.output_model_dir, 'saved_model')
+    saveh5model_dir = os.path.join(parameters.output_model_dir, 'saved_h5_model')
 
     if not parameters.restore_model:
         # check if output folder already exists
@@ -46,7 +47,6 @@ def training(_config: dict):
     # Create callbacks
     logdir = os.path.join(parameters.output_model_dir, 'logs')
     tb_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
-    # file_writer = tf.summary.create_file_writer(os.path.join(logdir, 'images'))
 
     checkpoint_filepath = os.path.join(parameters.output_model_dir, 'model_checkpoint',
                                        'cp-{epoch:03d}-{val_loss:.2f}')
@@ -61,19 +61,24 @@ def training(_config: dict):
                                                        cooldown=3,
                                                        verbose=1)
 
-    # Get model
-    model = get_model_train(parameters)
-
-    # Save architecture
-    model_json = model.to_json()
-    with open(export_architecture_filename, 'w') as f:
-        json.dump(model_json, f)
-
-    # Load weights if the model is restored
     if parameters.restore_model:
-        last_time_stamp = max([int(p.split(os.path.sep)[-1]) for p in glob(os.path.join(saveweights_dir, '*'))])
-        print("Restoring weights")
-        model.load_weights(os.path.join(saveweights_dir, str(last_time_stamp), 'weights'))
+        assert os.path.isfile(saveh5model_dir)
+        last_time_stamp = max([int(p.split(os.path.sep)[-1].split('-')[0])
+                               for p in glob(os.path.join(saveh5model_dir, '*'))])
+        model_file = os.path.join(saveh5model_dir, '{}-model.h5'.format(last_time_stamp))
+        model = get_model_train(parameters, model_path=model_file)
+        # TODO update this line once load_model can load custom loss / metric / layers...
+        # model = tf.keras.models.load_model(os.path.join(savemodel_dir, '{}-model.h5'.format(last_time_stamp)))
+
+    else:
+        # Get model
+        model = get_model_train(parameters)
+
+        # Save architecture
+        model_json = model.to_json()
+        with open(export_architecture_filename, 'w') as f:
+            json.dump(model_json, f)
+
 
     # Get datasets
     dataset_train = dataset_generator([csv_train_file],
@@ -96,16 +101,21 @@ def training(_config: dict):
               validation_steps=np.floor(n_samples_eval / parameters.eval_batch_size),
               callbacks=[tb_callback, mc_callback, lr_callback])
 
-    # Save weights
     timestamp = str(int(time.time()))
-    os.makedirs(saveweights_dir, exist_ok=True)
-    model.save_weights(os.path.join(saveweights_dir, timestamp, 'weights'),
-                       save_format='tf')
-    # TODO save with savedmodel
-    os.makedirs(savemodel_dir, exist_ok=True)
-    tf.keras.models.save_model(model,
-                               os.path.join(savemodel_dir, timestamp),
-                               include_optimizer=True,
-                               save_format="tf")
+    # # Save weights
+    # os.makedirs(saveweights_dir, exist_ok=True)
+    # model.save_weights(os.path.join(saveweights_dir, timestamp, 'weights'),
+    #                    save_format='tf')
+
+    # Save all model
+    os.makedirs(saveh5model_dir, exist_ok=True)
+    model.save(os.path.join(saveh5model_dir, '{}-model.h5'.format(timestamp)))
+
+    # TODO save with savedmodel, (restore is not working at the moment...)
+    # os.makedirs(savemodel_dir, exist_ok=True)
+    # tf.keras.models.save_model(model,
+    #                            os.path.join(savemodel_dir, timestamp),
+    #                            include_optimizer=True,
+    #                            save_format="tf")
 
 
