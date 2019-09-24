@@ -3,7 +3,7 @@ __author__ = 'solivr'
 __license__ = "GPL"
 
 import tensorflow as tf
-from tensorflow_addons.image.transform_ops import rotate
+from tensorflow_addons.image.transform_ops import rotate, transform
 from .config import Params, CONST
 from typing import Tuple, Union, List
 import collections
@@ -300,6 +300,47 @@ def dataset_generator(csv_filename: Union[List[str], str],
         return {'input_images': image,
                 'label_seq_length': features['label_seq_length']}, labels
 
+    def _apply_slant(features: dict, labels):
+        image = features['input_images']
+        height_image = tf.cast(tf.shape(image)[0], dtype=tf.float32)
+
+        with tf.name_scope('add_slant'):
+            alpha = tf.random.uniform([],
+                                      -params.data_augmentation_max_slant,
+                                      params.data_augmentation_max_slant,
+                                      name='pick_random_slant_angle')
+
+            shiftx = tf.math.maximum(tf.math.multiply(-alpha, height_image), 0)
+
+            # Pad in order not to loose image info when transformation is applied
+            x_pad = 0
+            y_pad = tf.math.round(tf.math.ceil(tf.math.abs(tf.math.multiply(alpha, height_image))))
+            y_pad = tf.cast(y_pad, dtype=tf.int32)
+            paddings = [[x_pad, x_pad], [y_pad, 0], [0, 0]]
+            transform_matrix = [1, alpha, shiftx, 0, 1, 0, 0, 0]
+
+            # Apply transformation to image
+            image_pad = tf.pad(image, paddings)
+            image_transformed = transform(image_pad, transform_matrix, interpolation='BILINEAR')
+
+            # Apply transformation to mask. The mask will be used to retrieve the pixels that have been filled
+            # with zero during transformation and update their value with background value
+            # TODO : Would be better to have some kind of binarization (i.e Otsu) and get the mean background value
+            background_pixel_value = 255
+            empty = background_pixel_value * tf.ones(tf.shape(image))
+            empty_pad = tf.pad(empty, paddings)
+            empty_transformed = tf.subtract(
+                tf.cast(background_pixel_value, dtype=tf.int32),
+                tf.cast(transform(empty_pad, transform_matrix, interpolation='NEAREST'), dtype=tf.int32)
+            )
+
+            # Update additional zeros values with background_pixel_value and cast result to uint8
+            image = tf.add(tf.cast(image_transformed, dtype=tf.int32), empty_transformed)
+            image = tf.cast(image, tf.uint8)
+
+        features['input_images'] = image
+        return features, labels
+
     def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
         image = features['input_images']
         image = augment_data(image, params.data_augmentation_max_rotation, minimum_width=params.max_chars_per_string)
@@ -310,7 +351,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
     def _pad_image_or_resize(features: dict, labels):
         image = features['input_images']
         if do_padding:
-            with tf.name_scope('do_padding'):
+            with tf.name_scope('padding'):
                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
                                                         increment=CONST.DIMENSION_REDUCTION_W_POOLING)
         # Resize
@@ -327,6 +368,13 @@ def dataset_generator(csv_filename: Union[List[str], str],
                     'label_seq_length': features['label_seq_length'],
                     'input_seq_length': input_seq_length}, labels
 
+    def _normalize_image(features: dict, labels):
+        image = tf.cast(features['input_images'], tf.float32)
+        image = tf.image.per_image_standardization(image)
+
+        features['input_images'] = image
+        return features, labels
+
     def _format_label_codes(features: dict, string_label_codes):
         splits = tf.strings.split([string_label_codes], sep=' ')
         label_codes = tf.squeeze(tf.strings.to_number(splits, out_type=tf.int32), axis=0)
@@ -336,8 +384,11 @@ def dataset_generator(csv_filename: Union[List[str], str],
 
     #  1. load image 2. data augmentation 3. padding
     dataset = dataset.map(_load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    if params.data_augmentation_max_slant != 0:
+        dataset = dataset.map(_apply_slant, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     if data_augmentation:
         dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(_normalize_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(_format_label_codes, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.shuffle(1024, reshuffle_each_iteration=False).repeat(num_epochs)
