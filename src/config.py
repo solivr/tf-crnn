@@ -268,7 +268,15 @@ class Params:
     def to_dict(self) -> dict:
         new_dict = self.__dict__.copy()
         del new_dict['alphabet']
+        del new_dict['n_pool']
         return new_dict
+
+    @classmethod
+    def from_json_file(cls, json_file: str):
+        with open(json_file, 'r') as file:
+            config = json.load(file)
+
+        return cls(**config)
 
 
 def import_params_from_json(model_directory: str=None, json_filename: str=None) -> dict:
