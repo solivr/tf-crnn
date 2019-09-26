@@ -235,14 +235,6 @@ def get_model_train(parameters: Params,
 
         return tf.divide(distance, tf.cast(count_chars, tf.float32), name='CER')
 
-    if model_path:
-        loaded_model = tf.keras.models.load_model(model_path,
-                                           custom_objects={'ConvBlock': ConvBlock,
-                                                           'warp_ctc_loss': warp_ctc_loss,
-                                                           'warp_cer_metric': warp_cer_metric})
-        loaded_model._experimental_run_tf_function = False # TODO this should be = True but tf-2.0 has still bugs...
-        return loaded_model
-
     # Define model and compile it
     model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=net_output, name='CRNN')
     optimizer = tf.keras.optimizers.Adam(learning_rate=parameters.learning_rate)
