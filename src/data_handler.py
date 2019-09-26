@@ -9,6 +9,7 @@ from typing import Tuple, Union, List
 import collections
 import numpy as np
 import cv2
+import os
 
 
 def random_rotation(img: tf.Tensor,
@@ -384,6 +385,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
 
     #  1. load image 2. data augmentation 3. padding
     dataset = dataset.map(_load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.cache(filename=os.path.join(params.output_model_dir, 'cache.tf-data'))
     if params.data_augmentation_max_slant != 0:
         dataset = dataset.map(_apply_slant, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     if data_augmentation:
@@ -391,7 +393,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
     dataset = dataset.map(_normalize_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(_format_label_codes, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.shuffle(1024, reshuffle_each_iteration=False).repeat(num_epochs)
+    dataset = dataset.shuffle(10 * batch_size, reshuffle_each_iteration=False).repeat(num_epochs)
 
     return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
 

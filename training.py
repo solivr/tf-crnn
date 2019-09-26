@@ -2,6 +2,9 @@
 __author__ = "solivr"
 __license__ = "GPL"
 
+import logging
+logging.getLogger("tensorflow").setLevel(logging.INFO)
+
 from src.config import Params
 from src.model import get_model_train
 from src.preprocessing import data_preprocessing
@@ -27,7 +30,7 @@ def training(_config: dict):
 
     # saveweights_dir = os.path.join(parameters.output_model_dir, 'saved_weights')
     # savemodel_dir = os.path.join(parameters.output_model_dir, 'saved_model')
-    saveh5model_dir = os.path.join(parameters.output_model_dir, 'saved_h5_model')
+    saved5model_dir = os.path.join(parameters.output_model_dir, 'saved_h5_model')
 
     if not parameters.restore_model:
         # check if output folder already exists
@@ -56,16 +59,16 @@ def training(_config: dict):
                                                      period=parameters.save_interval)
 
     lr_callback = tf.keras.callbacks.ReduceLROnPlateau(factor=0.5,
-                                                       patience=2,
-                                                       min_lr=0,
-                                                       cooldown=3,
+                                                       patience=10,
+                                                       cooldown=0,
+                                                       min_lr=1e-8,
                                                        verbose=1)
 
     if parameters.restore_model:
-        assert os.path.isfile(saveh5model_dir)
         last_time_stamp = max([int(p.split(os.path.sep)[-1].split('-')[0])
-                               for p in glob(os.path.join(saveh5model_dir, '*'))])
-        model_file = os.path.join(saveh5model_dir, '{}-model.h5'.format(last_time_stamp))
+                               for p in glob(os.path.join(saved5model_dir, '*'))])
+        model_file = os.path.join(saved5model_dir, '{}-model.h5'.format(last_time_stamp))
+        assert os.path.isfile(model_file)
         model = get_model_train(parameters, model_path=model_file)
         # TODO update this line once load_model can load custom loss / metric / layers...
         # model = tf.keras.models.load_model(os.path.join(savemodel_dir, '{}-model.h5'.format(last_time_stamp)))
@@ -78,7 +81,6 @@ def training(_config: dict):
         model_json = model.to_json()
         with open(export_architecture_filename, 'w') as f:
             json.dump(model_json, f)
-
 
     # Get datasets
     dataset_train = dataset_generator([csv_train_file],
@@ -108,8 +110,8 @@ def training(_config: dict):
     #                    save_format='tf')
 
     # Save all model
-    os.makedirs(saveh5model_dir, exist_ok=True)
-    model.save(os.path.join(saveh5model_dir, '{}-model.h5'.format(timestamp)))
+    os.makedirs(saved5model_dir, exist_ok=True)
+    model.save(os.path.join(saved5model_dir, '{}-model.h5'.format(timestamp)))
 
     # TODO save with savedmodel, (restore is not working at the moment...)
     # os.makedirs(savemodel_dir, exist_ok=True)

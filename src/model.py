@@ -65,6 +65,66 @@ class ConvBlock(Layer):
         return dict(list(super_config.items()) + list(config.items()))
 
 
+class CTCLoss(Layer):
+    def __init__(self,
+                 label_codes=[],
+                 input_seq_len=[],
+                 label_seq_length=[],
+                 **kwargs):
+        super(CTCLoss, self).__init__(**kwargs)
+
+        self.label_codes = label_codes
+        self.input_seq_len = input_seq_len
+        self.label_seq_length = label_seq_length
+
+    def call(self, inputs):
+        y_pred = inputs
+        return ctc_batch_cost(self.label_codes, y_pred, self.input_seq_len, self.label_seq_length)
+
+    def get_config(self):
+        super_config = super(CTCLoss, self).get_config()
+        return super_config
+
+
+class CERMetric(Layer):
+    def __init__(self,
+                 label_codes=[],
+                 input_seq_len=[],
+                 label_seq_length=[],
+                 **kwargs):
+        super(CERMetric, self).__init__(**kwargs)
+
+        self.label_codes = label_codes
+        self.input_seq_len = input_seq_len
+        self.label_seq_length = label_seq_length
+
+    def call(self, inputs):
+        y_pred = inputs
+        pred_codes_dense = ctc_decode(y_pred, tf.squeeze(self.input_seq_len, axis=-1), greedy=True)
+        pred_codes_dense = tf.squeeze(tf.cast(pred_codes_dense[0], tf.int64), axis=0)  # only [0] if greedy=true
+
+        # create sparse tensor
+        idx = tf.where(tf.not_equal(pred_codes_dense, -1))
+        pred_codes_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
+                                            tf.gather_nd(pred_codes_dense, idx),
+                                            tf.cast(tf.shape(pred_codes_dense), tf.int64))
+
+        idx = tf.where(tf.not_equal(self.label_codes, 0))
+        label_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
+                                       tf.gather_nd(self.label_codes, idx),
+                                       tf.cast(tf.shape(self.label_codes), tf.int64))
+        label_sparse = tf.cast(label_sparse, tf.int64)
+
+        # Compute edit distance and total chars count
+        distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, label_sparse, normalize=False))
+        count_chars = tf.reduce_sum(self.label_seq_length)
+
+        return tf.divide(distance, tf.cast(count_chars, tf.float32), name='CER')
+
+    def get_config(self):
+        super_config = super(CERMetric, self).get_config()
+        return super_config
+
 # class CERMetric(Metric):
 #     def __init__(self):
 #         super(CERMetric, self).__init__()
@@ -126,7 +186,7 @@ def get_crnn_output(input_images, parameters: Params=None):
 
     # Dense and softmax
     x = Dense(parameters.alphabet.n_classes)(x)
-    net_output = Softmax(name='softmax_output')(x)
+    net_output = Softmax()(x)
 
     return net_output
 
@@ -140,20 +200,14 @@ def get_model_train(parameters: Params,
     input_images = Input(shape=(h, w, c), name='input_images')
     input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
 
-    # if file_writer:
-    #     with file_writer.as_default():
-    #         tf.summary.image('augmented data', input_images, max_outputs=2)
-
     label_codes = Input(shape=(parameters.max_chars_per_string), dtype=tf.int32, name='label_codes')
-    label_seq_length = Input(shape=[1], dtype='int64', name='label_seq_length')
+    label_seq_length = Input(shape=[1], dtype=tf.int32, name='label_seq_length')
 
     net_output = get_crnn_output(input_images, parameters)
 
     # Loss function
     def warp_ctc_loss(y_true, y_pred):
         return ctc_batch_cost(label_codes, y_pred, input_seq_len, label_seq_length)
-
-    # tf.summary.scalar('loss', tf.reduce_mean(loss_ctc))
 
     # Metric function
     def warp_cer_metric(y_true, y_pred):
@@ -179,13 +233,15 @@ def get_model_train(parameters: Params,
         distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, label_sparse, normalize=False))
         count_chars = tf.reduce_sum(true_sequence_length)
 
-        return tf.divide(tf.cast(distance, tf.int64), count_chars, name='CER')
+        return tf.divide(distance, tf.cast(count_chars, tf.float32), name='CER')
 
     if model_path:
-        model = tf.keras.models.load_model(model_path, custom_objects={'ConvBlock': ConvBlock,
-                                                                       'warp_ctc_loss': warp_ctc_loss,
-                                                                       'warp_cer_metric': warp_cer_metric})
-        return model
+        loaded_model = tf.keras.models.load_model(model_path,
+                                           custom_objects={'ConvBlock': ConvBlock,
+                                                           'warp_ctc_loss': warp_ctc_loss,
+                                                           'warp_cer_metric': warp_cer_metric})
+        loaded_model._experimental_run_tf_function = False # TODO this should be = True but tf-2.0 has still bugs...
+        return loaded_model
 
     # Define model and compile it
     model = Model(inputs=[input_images, label_codes, input_seq_len, label_seq_length], outputs=net_output, name='CRNN')
