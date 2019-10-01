@@ -242,13 +242,13 @@ def apply_slant(image: np.ndarray, alpha: np.ndarray) -> (np.ndarray, np.ndarray
 
 def dataset_generator(csv_filename: Union[List[str], str],
                       params: Params,
-                      labels: bool=True,
+                      use_labels: bool=True,
                       batch_size: int=64,
                       data_augmentation: bool=False,
                       num_epochs: int=None):
     do_padding = True
 
-    if labels:
+    if use_labels:
         column_defaults = [['None'], ['None'], tf.int32]
         column_names = ['paths', 'label_codes', 'label_seq_length']
         label_name = 'label_codes'
@@ -292,16 +292,19 @@ def dataset_generator(csv_filename: Union[List[str], str],
     dataset = dataset.map(map_fn)
     # -----
 
-    def _load_image(features: dict, labels):
+    def _load_image(features: dict, labels=None):
         path = features['paths']
         image_content = tf.io.read_file(path)
         image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
                                   try_recover_truncated=True, name='image_decoding_op')
 
-        return {'input_images': image,
-                'label_seq_length': features['label_seq_length']}, labels
+        if use_labels:
+            return {'input_images': image,
+                    'label_seq_length': features['label_seq_length']}, labels
+        else:
+            return {'input_images': image}
 
-    def _apply_slant(features: dict, labels):
+    def _apply_slant(features: dict, labels=None):
         image = features['input_images']
         height_image = tf.cast(tf.shape(image)[0], dtype=tf.float32)
 
@@ -340,16 +343,16 @@ def dataset_generator(csv_filename: Union[List[str], str],
             image = tf.cast(image, tf.uint8)
 
         features['input_images'] = image
-        return features, labels
+        return features, labels if use_labels else features
 
-    def _data_augment_fn(features: dict, label) -> tf.data.Dataset:
+    def _data_augment_fn(features: dict, labels=None) -> tf.data.Dataset:
         image = features['input_images']
         image = augment_data(image, params.data_augmentation_max_rotation, minimum_width=params.max_chars_per_string)
 
         features.update({'input_images': image})
-        return features, label
+        return features, labels if use_labels else features
 
-    def _pad_image_or_resize(features: dict, labels):
+    def _pad_image_or_resize(features: dict, labels=None):
         image = features['input_images']
         if do_padding:
             with tf.name_scope('padding'):
@@ -361,20 +364,23 @@ def dataset_generator(csv_filename: Union[List[str], str],
             img_width = tf.shape(image)[1]
 
         input_seq_length = tf.cast(tf.floor(tf.divide(img_width, params.n_pool)), tf.int32)
-
-        assert_op = tf.debugging.assert_greater_equal(input_seq_length,
-                                                      features['label_seq_length'])
-        with tf.control_dependencies([assert_op]):
+        if use_labels:
+            assert_op = tf.debugging.assert_greater_equal(input_seq_length,
+                                                          features['label_seq_length'])
+            with tf.control_dependencies([assert_op]):
+                return {'input_images': image,
+                        'label_seq_length': features['label_seq_length'],
+                        'input_seq_length': input_seq_length}, labels
+        else:
             return {'input_images': image,
-                    'label_seq_length': features['label_seq_length'],
-                    'input_seq_length': input_seq_length}, labels
+                    'input_seq_length': input_seq_length}
 
-    def _normalize_image(features: dict, labels):
+    def _normalize_image(features: dict, labels=None):
         image = tf.cast(features['input_images'], tf.float32)
         image = tf.image.per_image_standardization(image)
 
         features['input_images'] = image
-        return features, labels
+        return features, labels if use_labels else features
 
     def _format_label_codes(features: dict, string_label_codes):
         splits = tf.strings.split([string_label_codes], sep=' ')
@@ -385,47 +391,72 @@ def dataset_generator(csv_filename: Union[List[str], str],
 
     #  1. load image 2. data augmentation 3. padding
     dataset = dataset.map(_load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.cache(filename=os.path.join(params.output_model_dir, 'cache.tf-data'))
-    if params.data_augmentation_max_slant != 0:
+    # this causes problems when using the same cache for training, validation and prediction data...
+    # dataset = dataset.cache(filename=os.path.join(params.output_model_dir, 'cache.tf-data'))
+    if data_augmentation and params.data_augmentation_max_slant != 0:
         dataset = dataset.map(_apply_slant, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     if data_augmentation:
         dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(_normalize_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.map(_format_label_codes, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.shuffle(10 * batch_size, reshuffle_each_iteration=False).repeat(num_epochs)
+    if use_labels:
+        dataset = dataset.map(_format_label_codes, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.shuffle(10 * batch_size, reshuffle_each_iteration=False)
+    dataset = dataset.repeat(num_epochs) if num_epochs is not None else dataset
 
     return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
 
 
-def dataset_prediction(image_filenames: Union[List[str], str],
-                       params: Params,
-                       batch_size: int = 64):
-    do_padding = True
-
-    dataset = tf.data.Dataset.from_tensor_slices(image_filenames)
-
-    # -----
-
-    def _load_image_and_pad_or_resize(path):
-        image_content = tf.io.read_file(path)
-        image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
-                                  try_recover_truncated=True, name='image_decoding_op')
-
-        if do_padding:
-            with tf.name_scope('do_padding'):
-                image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
-                                                        increment=CONST.DIMENSION_REDUCTION_W_POOLING)
-        # Resize
-        else:
-            image = tf.image.resize_images(image, size=params.input_shape)
-            img_width = tf.shape(image)[1]
-
-        input_seq_length = tf.cast(tf.floor(tf.divide(img_width, params.n_pool)), tf.int32)
-
-        return {'input_images': image,
-                'input_seq_length': input_seq_length}
-
-    dataset = dataset.map(_load_image_and_pad_or_resize)
-
-    return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+# def dataset_prediction(image_filenames: Union[List[str], str]=None,
+#                        csv_filename: str=None,
+#                        params: Params=None,
+#                        batch_size: int=64):
+#
+#     assert params, 'params cannot be None'
+#     assert image_filenames or csv_filename, 'You need to feed an input (image_filenames or csv_filename)'
+#
+#     do_padding = True
+#
+#     def _load_image(path):
+#         image_content = tf.io.read_file(path)
+#         image = tf.io.decode_jpeg(image_content, channels=params.input_channels,
+#                                   try_recover_truncated=True, name='image_decoding_op')
+#
+#         return {'input_images': image}
+#
+#     def _normalize_image(features: dict):
+#         image = tf.cast(features['input_images'], tf.float32)
+#         image = tf.image.per_image_standardization(image)
+#
+#         features['input_images'] = image
+#         return features
+#
+#     def _pad_image_or_resize(features: dict):
+#         image = features['input_images']
+#         if do_padding:
+#             with tf.name_scope('padding'):
+#                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
+#                                                         increment=CONST.DIMENSION_REDUCTION_W_POOLING)
+#         # Resize
+#         else:
+#             image = tf.image.resize(image, size=params.input_shape)
+#             img_width = tf.shape(image)[1]
+#
+#         input_seq_length = tf.cast(tf.floor(tf.math.divide(img_width, params.n_pool)), tf.int32)
+#
+#         return {'input_images': image,
+#                 'input_seq_length': input_seq_length}
+#     if image_filenames is not None:
+#         dataset = tf.data.Dataset.from_tensor_slices(image_filenames)
+#     elif csv_filename is not None:
+#         column_defaults = [['None']]
+#         dataset = tf.data.experimental.CsvDataset(csv_filename,
+#                                                   record_defaults=column_defaults,
+#                                                   field_delim=params.csv_delimiter,
+#                                                   header=False)
+#         # dataset = dataset.map(map_fn)
+#     dataset = dataset.map(_load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+#     dataset = dataset.map(_normalize_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+#     dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+#
+#     return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
