@@ -253,11 +253,13 @@ def get_model_inference(parameters: Params,
 
     input_images = Input(shape=(h, w, c), name='input_images')
     input_seq_len = Input(shape=[1], dtype=tf.int32, name='input_seq_length')
+    filename_images = Input(shape=[1], dtype=tf.string, name='filename_images')
 
     net_output = get_crnn_output(input_images, parameters)
     output_seq_len = tf.identity(input_seq_len)  # need this op to pass it to output
+    filenames = tf.identity(filename_images)
 
-    model = Model(inputs=[input_images, input_seq_len], outputs=[net_output, output_seq_len])
+    model = Model(inputs=[input_images, input_seq_len, filename_images], outputs=[net_output, output_seq_len, filenames])
 
     if weights_dir:
         model.load_weights(weights_dir)
