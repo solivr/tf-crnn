@@ -245,7 +245,8 @@ def dataset_generator(csv_filename: Union[List[str], str],
                       use_labels: bool=True,
                       batch_size: int=64,
                       data_augmentation: bool=False,
-                      num_epochs: int=None):
+                      num_epochs: int=None,
+                      shuffle: bool=True):
     do_padding = True
 
     if use_labels:
@@ -302,7 +303,8 @@ def dataset_generator(csv_filename: Union[List[str], str],
             return {'input_images': image,
                     'label_seq_length': features['label_seq_length']}, labels
         else:
-            return {'input_images': image}
+            return {'input_images': image,
+                    'filename_images': path}
 
     def _apply_slant(features: dict, labels=None):
         image = features['input_images']
@@ -373,7 +375,8 @@ def dataset_generator(csv_filename: Union[List[str], str],
                         'input_seq_length': input_seq_length}, labels
         else:
             return {'input_images': image,
-                    'input_seq_length': input_seq_length}
+                    'input_seq_length': input_seq_length,
+                    'filename_images': features['filename_images']}
 
     def _normalize_image(features: dict, labels=None):
         image = tf.cast(features['input_images'], tf.float32)
@@ -389,19 +392,20 @@ def dataset_generator(csv_filename: Union[List[str], str],
         features.update({'label_codes': label_codes})
         return features, [0]
 
+
+    num_parallel_calls = tf.data.experimental.AUTOTUNE
     #  1. load image 2. data augmentation 3. padding
-    dataset = dataset.map(_load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(_load_image, num_parallel_calls=num_parallel_calls)
     # this causes problems when using the same cache for training, validation and prediction data...
     # dataset = dataset.cache(filename=os.path.join(params.output_model_dir, 'cache.tf-data'))
     if data_augmentation and params.data_augmentation_max_slant != 0:
-        dataset = dataset.map(_apply_slant, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(_apply_slant, num_parallel_calls=num_parallel_calls)
     if data_augmentation:
-        dataset = dataset.map(_data_augment_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.map(_normalize_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    if use_labels:
-        dataset = dataset.map(_format_label_codes, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.shuffle(10 * batch_size, reshuffle_each_iteration=False)
+        dataset = dataset.map(_data_augment_fn, num_parallel_calls=num_parallel_calls)
+    dataset = dataset.map(_normalize_image, num_parallel_calls=num_parallel_calls)
+    dataset = dataset.map(_pad_image_or_resize, num_parallel_calls=num_parallel_calls)
+    dataset = dataset.map(_format_label_codes, num_parallel_calls=num_parallel_calls) if use_labels else dataset
+    dataset = dataset.shuffle(10 * batch_size, reshuffle_each_iteration=False) if shuffle else dataset
     dataset = dataset.repeat(num_epochs) if num_epochs is not None else dataset
 
     return dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
