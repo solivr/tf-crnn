@@ -9,10 +9,9 @@ from src.config import Params
 from src.model import get_model_train
 from src.preprocessing import data_preprocessing
 from src.data_handler import dataset_generator
-from src.callbacks import CustomLoaderCallback, CustomSavingCallback, EPOCH_FILENAME
+from src.callbacks import CustomLoaderCallback, CustomSavingCallback, LRTensorBoard, EPOCH_FILENAME, FOLDER_SAVED_MODEL
 import tensorflow as tf
 import numpy as np
-import time
 import os
 import json
 import pickle
@@ -21,14 +20,14 @@ from sacred import Experiment
 
 ex = Experiment('crnn')
 
-ex.add_config('config.json')
+ex.add_config('crnn_config.json')
 
 @ex.automain
 def training(_config: dict):
     parameters = Params(**_config)
 
     export_config_filename =  os.path.join(parameters.output_model_dir, 'config.json')
-    saving_dir = os.path.join(parameters.output_model_dir, 'saving')
+    saving_dir = os.path.join(parameters.output_model_dir, FOLDER_SAVED_MODEL)
 
     if not parameters.restore_model:
         # check if output folder already exists
@@ -47,14 +46,11 @@ def training(_config: dict):
 
     # Create callbacks
     logdir = os.path.join(parameters.output_model_dir, 'logs')
-    tb_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
+    tb_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir,
+                                                 profile_batch=0)
 
-    checkpoint_filepath = os.path.join(parameters.output_model_dir, 'model_checkpoint',
-                                       'cp-{epoch:03d}-{val_loss:.2f}')
-    mc_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_filepath,
-                                                     save_best_only=True,
-                                                     save_weights_only=True,
-                                                     period=parameters.save_interval)
+    lrtb_callback = LRTensorBoard(log_dir=logdir,
+                                  profile_batch=0)
 
     lr_callback = tf.keras.callbacks.ReduceLROnPlateau(factor=0.5,
                                                        patience=10,
@@ -62,9 +58,16 @@ def training(_config: dict):
                                                        min_lr=1e-8,
                                                        verbose=1)
 
-    sv_callback = CustomSavingCallback(saving_dir)
+    es_callback = tf.keras.callbacks.EarlyStopping(min_delta=0.01,
+                                                   patience=4,
+                                                   verbose=1)
 
-    list_callbacks = [tb_callback, mc_callback, lr_callback, sv_callback]
+    sv_callback = CustomSavingCallback(saving_dir,
+                                       saving_freq=parameters.save_interval,
+                                       save_best_only=True,
+                                       keep_max_models=3)
+
+    list_callbacks = [tb_callback, lrtb_callback, lr_callback, es_callback, sv_callback]
 
     if parameters.restore_model:
         last_time_stamp = max([int(p.split(os.path.sep)[-1].split('-')[0])
@@ -107,5 +110,3 @@ def training(_config: dict):
               validation_data=dataset_eval,
               validation_steps=np.floor(n_samples_eval / parameters.eval_batch_size),
               callbacks=list_callbacks)
-
-

@@ -78,7 +78,7 @@ def preprocess_csv(csv_filename: str,
 
     # Compute width images (after resizing)
     dataframe['input_length'] = dataframe.paths.apply(lambda x: _compute_length_inputs(x, parameters.input_shape))
-    dataframe.input_length = dataframe.input_length.apply(lambda x: np.floor(x / parameters.n_pool))
+    dataframe.input_length = dataframe.input_length.apply(lambda x: np.floor(x / parameters.downscale_factor))
     # Remove items with longer label than input
     dataframe = dataframe[dataframe.label_len < dataframe.input_length]
 

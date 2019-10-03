@@ -195,7 +195,6 @@ class Params:
         self.cnn_kernel_size = kwargs.get('cnn_kernel_size', [3, 3, 3, 3, 3])
         self.cnn_stride_size = kwargs.get('cnn_stride_size', [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1)])
         self.cnn_pool_size = kwargs.get('cnn_pool_size', [(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
-        self.cnn_pool_strides = kwargs.get('cnn_pool_strides', [(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
         self.cnn_batch_norm = kwargs.get('cnn_batch_norm', [False, False, False, False, False])
         self.rnn_units = kwargs.get('rnn_units', [256, 256])
         self._keep_prob_dropout = kwargs.get('keep_prob', 0.5)
@@ -226,16 +225,15 @@ class Params:
 
         self._assign_alphabet()
 
-        # TODO compute n_pool correctly, this is missing cnn_pool_stride
         cnn_params = zip(self.cnn_pool_size, self.cnn_stride_size)
-        self.n_pool = reduce(lambda i, j: i*j, map(lambda k: k[0][1] * k[1][1], cnn_params))
+        self.downscale_factor = reduce(lambda i, j: i * j, map(lambda k: k[0][1] * k[1][1], cnn_params))
 
         # TODO add additional checks for the architecture
         assert len(self.cnn_features_list) == len(self.cnn_kernel_size) == len(self.cnn_stride_size) \
-               == len(self.cnn_pool_size) == len(self.cnn_pool_strides) == len(self.cnn_batch_norm), \
+               == len(self.cnn_pool_size) == len(self.cnn_batch_norm), \
             "Length of parameters of model are not the same, check that all the layers parameters have the same length."
 
-        max_input_width = (self.max_chars_per_string + 1) * self.n_pool
+        max_input_width = (self.max_chars_per_string + 1) * self.downscale_factor
         assert max_input_width <= self.input_shape[1], "Maximum length of labels is {}, input width should be greater or " \
                                                        "equal to {} but is {}".format(self.max_chars_per_string,
                                                                                       max_input_width,
@@ -268,7 +266,7 @@ class Params:
     def to_dict(self) -> dict:
         new_dict = self.__dict__.copy()
         del new_dict['alphabet']
-        del new_dict['n_pool']
+        del new_dict['downscale_factor']
         return new_dict
 
     @classmethod

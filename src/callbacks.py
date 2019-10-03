@@ -3,10 +3,13 @@ __author__ = "solivr"
 __license__ = "GPL"
 
 import tensorflow as tf
+from tensorflow.keras.callbacks import Callback, TensorBoard
 import os
+import shutil
 import pickle
 import json
 import time
+import numpy as np
 from .config import Params
 
 
@@ -18,25 +21,66 @@ EPOCH_FILENAME = 'epoch.pkl'
 FOLDER_SAVED_MODEL = 'saving'
 
 
-class CustomSavingCallback(tf.keras.callbacks.Callback):
+class CustomSavingCallback(Callback):
     """
-    Callback to save weights, architecture, and optimizer at the end of training
+    Callback to save weights, architecture, and optimizer at the end of training.
+    Inspired by ModelCheckpoint.
     """
     def __init__(self,
-                 output_dir: str):
+                 output_dir: str,
+                 saving_freq:int,
+                 save_best_only: bool=False,
+                 keep_max_models:int=5):
         super(CustomSavingCallback, self).__init__()
 
         self.saving_dir = output_dir
+        self.saving_freq = saving_freq
+        self.save_best_only = save_best_only
+        self.keep_max_models = keep_max_models
+
+        self.epochs_since_last_save = 0
+
+        self.monitor = 'val_loss'
+        self.monitor_op = np.less
+        self.best_value = np.Inf # todo: when restoring model we could also restore val_loss and metric
 
     def on_epoch_begin(self,
                        epoch,
                        logs=None):
         self._current_epoch = epoch
 
+    def on_epoch_end(self,
+                     epoch,
+                     logs=None):
+        self.epochs_since_last_save += 1
+
+        if self.epochs_since_last_save == self.saving_freq:
+            self._export_model(logs)
+            self.epochs_since_last_save = 0
+
     def on_train_end(self,
                      logs=None):
+        self._export_model(logs)
+        self.epochs_since_last_save = 0
+
+
+    def _export_model(self, logs):
         timestamp = str(int(time.time()))
         folder = os.path.join(self.saving_dir, timestamp)
+
+        if self.save_best_only:
+            current_value = logs.get(self.monitor)
+
+            if self.monitor_op(current_value, self.best_value):
+                print('\n{} improved from {:0.5f} to {:0.5f},'
+                      ' saving model to {}'.format(self.monitor, self.best_value,
+                                                   current_value, folder))
+                self.best_value = current_value
+
+            else:
+                print('\n{} did not improve from {:0.5f}'.format(self.monitor, self.best_value))
+                return
+
         os.makedirs(folder)
 
         # save architecture
@@ -62,8 +106,20 @@ class CustomSavingCallback(tf.keras.callbacks.Callback):
         with open(os.path.join(folder, EPOCH_FILENAME), 'wb') as f:
             pickle.dump(epoch, f)
 
+        self._clean_exports()
 
-class CustomLoaderCallback(tf.keras.callbacks.Callback):
+    def _clean_exports(self):
+        timestamp_folders = [int(f) for f in os.listdir(self.saving_dir)]
+        timestamp_folders.sort(reverse=True)
+
+        if len(timestamp_folders) > self.keep_max_models:
+            folders_to_remove = timestamp_folders[self.keep_max_models:]
+            for f in folders_to_remove:
+                shutil.rmtree(os.path.join(self.saving_dir, str(f)))
+
+
+
+class CustomLoaderCallback(Callback):
     """
     Callback to load necessary weight and parameters for training, evaluation and prediction
     """
@@ -92,7 +148,7 @@ class CustomLoaderCallback(tf.keras.callbacks.Callback):
         self.model.optimizer.set_weights(optimizer_weights)
 
 
-class CustomPredictionSaverCallback(tf.keras.callbacks.Callback):
+class CustomPredictionSaverCallback(Callback):
     def __init__(self,
                  output_dir: str,
                  parameters: Params):
@@ -121,3 +177,12 @@ class CustomPredictionSaverCallback(tf.keras.callbacks.Callback):
                 n = n[0] # n is a list of one element
                 f.write((n.decode() + ';' + s + '\n').encode('utf8'))
 
+
+class LRTensorBoard(TensorBoard):
+    # From https://github.com/keras-team/keras/pull/9168#issuecomment-359901128
+    def __init__(self, log_dir, **kwargs):  # add other arguments to __init__ if you need
+        super(LRTensorBoard, self).__init__(log_dir=log_dir, **kwargs)
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs.update({'lr': tf.keras.backend.eval(self.model.optimizer.lr)})
+        super(LRTensorBoard, self).on_epoch_end(epoch, logs)

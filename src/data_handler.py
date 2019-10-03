@@ -7,11 +7,9 @@ from tensorflow_addons.image.transform_ops import rotate, transform
 from .config import Params, CONST
 from typing import Tuple, Union, List
 import collections
-import numpy as np
-import cv2
-import os
 
 
+@tf.function
 def random_rotation(img: tf.Tensor,
                     max_rotation: float=0.1,
                     crop: bool=True,
@@ -77,7 +75,7 @@ def random_rotation(img: tf.Tensor,
 #
 #     return tf.pad(image, paddings, mode='REFLECT', name='random_padding')
 
-
+@tf.function
 def augment_data(image: tf.Tensor,
                  max_rotation: float=0.1,
                  minimum_width: int=0) -> tf.Tensor:
@@ -206,38 +204,38 @@ def padding_inputs_width(image: tf.Tensor,
     return pad_image, new_w
 
 
-def apply_slant(image: np.ndarray, alpha: np.ndarray) -> (np.ndarray, np.ndarray):
-    alpha = alpha[0]
-
-    def _find_background_color(image: np.ndarray) -> int:
-        """
-        Given a grayscale image, finds the background color value
-        :param image: grayscale image
-        :return: background color value (int)
-        """
-        # Otsu's thresholding after Gaussian filtering
-        blur = cv2.GaussianBlur(image[:, :, 0].astype(np.uint8), (5, 5), 0)
-        thresh_value, thresholded_image = cv2.threshold(blur.astype(np.uint8), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # Find which is the background (0 or 255). Supposing that the background color occurrence is higher
-        # than the writing color
-        counts, bin_edges = np.histogram(thresholded_image, bins=2)
-        background_color = int(np.median(image[thresholded_image == 255 * np.argmax(counts)]))
-
-        return background_color
-
-    shape_image = image.shape
-    shift = max(-alpha * shape_image[0], 0)
-    output_size = (int(shape_image[1] + np.ceil(abs(alpha * shape_image[0]))), int(shape_image[0]))
-
-    warpM = np.array([[1, alpha, shift], [0, 1, 0]])
-
-    # Find color of background in order to replicate it in the borders
-    border_value = _find_background_color(image)
-
-    image_warp = cv2.warpAffine(image, np.array(warpM), output_size, borderValue=border_value)
-
-    return image_warp, np.array(output_size)
+# def apply_slant(image: np.ndarray, alpha: np.ndarray) -> (np.ndarray, np.ndarray):
+#     alpha = alpha[0]
+#
+#     def _find_background_color(image: np.ndarray) -> int:
+#         """
+#         Given a grayscale image, finds the background color value
+#         :param image: grayscale image
+#         :return: background color value (int)
+#         """
+#         # Otsu's thresholding after Gaussian filtering
+#         blur = cv2.GaussianBlur(image[:, :, 0].astype(np.uint8), (5, 5), 0)
+#         thresh_value, thresholded_image = cv2.threshold(blur.astype(np.uint8), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+#
+#         # Find which is the background (0 or 255). Supposing that the background color occurrence is higher
+#         # than the writing color
+#         counts, bin_edges = np.histogram(thresholded_image, bins=2)
+#         background_color = int(np.median(image[thresholded_image == 255 * np.argmax(counts)]))
+#
+#         return background_color
+#
+#     shape_image = image.shape
+#     shift = max(-alpha * shape_image[0], 0)
+#     output_size = (int(shape_image[1] + np.ceil(abs(alpha * shape_image[0]))), int(shape_image[0]))
+#
+#     warpM = np.array([[1, alpha, shift], [0, 1, 0]])
+#
+#     # Find color of background in order to replicate it in the borders
+#     border_value = _find_background_color(image)
+#
+#     image_warp = cv2.warpAffine(image, np.array(warpM), output_size, borderValue=border_value)
+#
+#     return image_warp, np.array(output_size)
 
 
 def dataset_generator(csv_filename: Union[List[str], str],
@@ -365,7 +363,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
             image = tf.image.resize(image, size=params.input_shape)
             img_width = tf.shape(image)[1]
 
-        input_seq_length = tf.cast(tf.floor(tf.divide(img_width, params.n_pool)), tf.int32)
+        input_seq_length = tf.cast(tf.floor(tf.divide(img_width, params.downscale_factor)), tf.int32)
         if use_labels:
             assert_op = tf.debugging.assert_greater_equal(input_seq_length,
                                                           features['label_seq_length'])

@@ -18,7 +18,6 @@ class ConvBlock(Layer):
                  stride: Tuple[int, int],
                  cnn_padding: str,
                  pool_size: Tuple[int, int],
-                 pool_strides: Tuple[int, int],
                  batchnorm: bool,
                  **kwargs):
         super(ConvBlock, self).__init__(**kwargs)
@@ -30,8 +29,7 @@ class ConvBlock(Layer):
                                      renorm_clipping={'rmax': 1e2, 'rmin': 1e-1, 'dmax': 1e1},
                                      trainable=True) if batchnorm else None
         self.pool = MaxPool2D(pool_size=pool_size,
-                              strides=pool_strides,
-                              padding='same')
+                              padding='same') if pool_size > [1, 1] else None
 
         # for config purposes
         self._features = features
@@ -39,7 +37,6 @@ class ConvBlock(Layer):
         self._stride = stride
         self._cnn_padding = cnn_padding
         self._pool_size = pool_size
-        self._pool_strides = pool_strides
         self._batchnorm = batchnorm
 
     def call(self, inputs, training=False):
@@ -59,71 +56,70 @@ class ConvBlock(Layer):
             'stride': self._stride,
             'cnn_padding': self._cnn_padding,
             'pool_size': self._pool_size,
-            'pool_strides': self._pool_strides,
             'batchnorm': self._batchnorm
         }
         return dict(list(super_config.items()) + list(config.items()))
 
 
-class CTCLoss(Layer):
-    def __init__(self,
-                 label_codes=[],
-                 input_seq_len=[],
-                 label_seq_length=[],
-                 **kwargs):
-        super(CTCLoss, self).__init__(**kwargs)
+# class CTCLoss(Layer):
+#     def __init__(self,
+#                  label_codes=[],
+#                  input_seq_len=[],
+#                  label_seq_length=[],
+#                  **kwargs):
+#         super(CTCLoss, self).__init__(**kwargs)
+#
+#         self.label_codes = label_codes
+#         self.input_seq_len = input_seq_len
+#         self.label_seq_length = label_seq_length
+#
+#     def call(self, inputs):
+#         y_pred = inputs
+#         return ctc_batch_cost(self.label_codes, y_pred, self.input_seq_len, self.label_seq_length)
+#
+#     def get_config(self):
+#         super_config = super(CTCLoss, self).get_config()
+#         return super_config
 
-        self.label_codes = label_codes
-        self.input_seq_len = input_seq_len
-        self.label_seq_length = label_seq_length
 
-    def call(self, inputs):
-        y_pred = inputs
-        return ctc_batch_cost(self.label_codes, y_pred, self.input_seq_len, self.label_seq_length)
-
-    def get_config(self):
-        super_config = super(CTCLoss, self).get_config()
-        return super_config
-
-
-class CERMetric(Layer):
-    def __init__(self,
-                 label_codes=[],
-                 input_seq_len=[],
-                 label_seq_length=[],
-                 **kwargs):
-        super(CERMetric, self).__init__(**kwargs)
-
-        self.label_codes = label_codes
-        self.input_seq_len = input_seq_len
-        self.label_seq_length = label_seq_length
-
-    def call(self, inputs):
-        y_pred = inputs
-        pred_codes_dense = ctc_decode(y_pred, tf.squeeze(self.input_seq_len, axis=-1), greedy=True)
-        pred_codes_dense = tf.squeeze(tf.cast(pred_codes_dense[0], tf.int64), axis=0)  # only [0] if greedy=true
-
-        # create sparse tensor
-        idx = tf.where(tf.not_equal(pred_codes_dense, -1))
-        pred_codes_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
-                                            tf.gather_nd(pred_codes_dense, idx),
-                                            tf.cast(tf.shape(pred_codes_dense), tf.int64))
-
-        idx = tf.where(tf.not_equal(self.label_codes, 0))
-        label_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
-                                       tf.gather_nd(self.label_codes, idx),
-                                       tf.cast(tf.shape(self.label_codes), tf.int64))
-        label_sparse = tf.cast(label_sparse, tf.int64)
-
-        # Compute edit distance and total chars count
-        distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, label_sparse, normalize=False))
-        count_chars = tf.reduce_sum(self.label_seq_length)
-
-        return tf.divide(distance, tf.cast(count_chars, tf.float32), name='CER')
-
-    def get_config(self):
-        super_config = super(CERMetric, self).get_config()
-        return super_config
+# class CERMetric(Layer):
+#     def __init__(self,
+#                  label_codes=[],
+#                  input_seq_len=[],
+#                  label_seq_length=[],
+#                  **kwargs):
+#         super(CERMetric, self).__init__(**kwargs)
+#
+#         self.label_codes = label_codes
+#         self.input_seq_len = input_seq_len
+#         self.label_seq_length = label_seq_length
+#
+#     def call(self, inputs):
+#         y_pred = inputs
+#         pred_codes_dense = ctc_decode(y_pred, tf.squeeze(self.input_seq_len, axis=-1), greedy=True)
+#         pred_codes_dense = tf.squeeze(tf.cast(pred_codes_dense[0], tf.int64), axis=0)  # only [0] if greedy=true
+#
+#         # create sparse tensor
+#         idx = tf.where(tf.not_equal(pred_codes_dense, -1))
+#         pred_codes_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
+#                                             tf.gather_nd(pred_codes_dense, idx),
+#                                             tf.cast(tf.shape(pred_codes_dense), tf.int64))
+#
+#         idx = tf.where(tf.not_equal(self.label_codes, 0))
+#         label_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
+#                                        tf.gather_nd(self.label_codes, idx),
+#                                        tf.cast(tf.shape(self.label_codes), tf.int64))
+#         label_sparse = tf.cast(label_sparse, tf.int64)
+#
+#         # Compute edit distance and total chars count
+#         distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, label_sparse, normalize=False))
+#         count_chars = tf.reduce_sum(self.label_seq_length)
+#
+#         return tf.divide(distance, tf.cast(count_chars, tf.float32), name='CER')
+#
+#     def get_config(self):
+#         super_config = super(CERMetric, self).get_config()
+#         return super_config
 
 # class CERMetric(Metric):
 #     def __init__(self):
@@ -159,15 +155,13 @@ def get_crnn_output(input_images, parameters: Params=None):
     cnn_features_list = parameters.cnn_features_list
     cnn_kernel_size = parameters.cnn_kernel_size
     cnn_pool_size = parameters.cnn_pool_size
-    cnn_pool_strides = parameters.cnn_pool_strides
     cnn_stride_size = parameters.cnn_stride_size
     cnn_batch_norm = parameters.cnn_batch_norm
     rnn_units = parameters.rnn_units
 
     # CNN layers
-    cnn_params = zip(cnn_features_list, cnn_kernel_size, cnn_stride_size, cnn_pool_size,
-                     cnn_pool_strides, cnn_batch_norm)
-    conv_layers = [ConvBlock(ft, ks, ss, 'same', psz, pst, bn) for ft, ks, ss, psz, pst, bn in cnn_params]
+    cnn_params = zip(cnn_features_list, cnn_kernel_size, cnn_stride_size, cnn_pool_size, cnn_batch_norm)
+    conv_layers = [ConvBlock(ft, ks, ss, 'same', psz, bn) for ft, ks, ss, psz, bn in cnn_params]
 
     x = conv_layers[0](input_images)
     for conv in conv_layers[1:]:
