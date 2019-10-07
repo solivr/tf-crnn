@@ -52,6 +52,8 @@ class CustomSavingCallback(Callback):
     def on_epoch_end(self,
                      epoch,
                      logs=None):
+
+        self.logs = logs
         self.epochs_since_last_save += 1
 
         if self.epochs_since_last_save == self.saving_freq:
@@ -60,7 +62,7 @@ class CustomSavingCallback(Callback):
 
     def on_train_end(self,
                      logs=None):
-        self._export_model(logs)
+        self._export_model(self.logs)
         self.epochs_since_last_save = 0
 
 
