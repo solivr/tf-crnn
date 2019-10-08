@@ -16,11 +16,13 @@ import os
 import json
 import pickle
 from glob import glob
-from sacred import Experiment
+from sacred import Experiment, SETTINGS
+
+SETTINGS.CONFIG.READ_ONLY_CONFIG = False
 
 ex = Experiment('crnn')
 
-ex.add_config('crnn_config.json')
+ex.add_config('config.json')
 
 @ex.automain
 def training(_config: dict):
@@ -58,8 +60,8 @@ def training(_config: dict):
                                                        min_lr=1e-8,
                                                        verbose=1)
 
-    es_callback = tf.keras.callbacks.EarlyStopping(min_delta=0.01,
-                                                   patience=4,
+    es_callback = tf.keras.callbacks.EarlyStopping(min_delta=0.005,
+                                                   patience=20,
                                                    verbose=1)
 
     sv_callback = CustomSavingCallback(saving_dir,

@@ -12,7 +12,7 @@ from src.callbacks import CustomPredictionSaverCallback, FOLDER_SAVED_MODEL
 
 @click.command()
 @click.option('--csv_filename', help='A csv file containing the path to the images to predict')
-@click.option('--output_model_dir', help='Directory where all the exported data relatie to an experiment has been saved')
+@click.option('--output_model_dir', help='Directory where all the exported data related to an experiment has been saved')
 def prediction(csv_filename: str,
                output_model_dir: str):
     parameters = Params.from_json_file(os.path.join(output_model_dir, 'config.json'))
