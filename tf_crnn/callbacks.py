@@ -24,7 +24,16 @@ FOLDER_SAVED_MODEL = 'saving'
 class CustomSavingCallback(Callback):
     """
     Callback to save weights, architecture, and optimizer at the end of training.
-    Inspired by ModelCheckpoint.
+    Inspired by `ModelCheckpoint`.
+
+    :ivar output_dir: path to the folder where files will be saved
+    :vartype output_dir: str
+    :ivar saving_freq: save every `n` epochs
+    :vartype saving_freq: int
+    :ivar save_best_only: wether to save a model if it is best thant the last saving
+    :vartype save_best_only: bool
+    :ivar keep_max_models: number of models to keep, the older ones will be deleted
+    :vartype keep_max_models: int
     """
     def __init__(self,
                  output_dir: str,
@@ -123,7 +132,10 @@ class CustomSavingCallback(Callback):
 
 class CustomLoaderCallback(Callback):
     """
-    Callback to load necessary weight and parameters for training, evaluation and prediction
+    Callback to load necessary weight and parameters for training, evaluation and prediction.
+
+    :ivar loading_dir: path to directory to save logs
+    :vartype loading_dir: str
     """
     def __init__(self,
                  loading_dir: str):
@@ -151,6 +163,15 @@ class CustomLoaderCallback(Callback):
 
 
 class CustomPredictionSaverCallback(Callback):
+    """
+    Callback to save prediction decoded outputs.
+    This will save the decoded outputs into a file.
+
+    :ivar output_dir: path to directory to save logs
+    :vartype output_dir: str
+    :ivar parameters: parameters of the experiment (``Params``)
+    :vartype parameters: Params
+    """
     def __init__(self,
                  output_dir: str,
                  parameters: Params):
@@ -181,10 +202,20 @@ class CustomPredictionSaverCallback(Callback):
 
 
 class LRTensorBoard(TensorBoard):
+    """
+    Adds learning rate to TensorBoard scalars.
+
+    :ivar logdir: path to directory to save logs
+    :vartype logdir: str
+    """
     # From https://github.com/keras-team/keras/pull/9168#issuecomment-359901128
-    def __init__(self, log_dir, **kwargs):  # add other arguments to __init__ if you need
+    def __init__(self,
+                 log_dir: str,
+                 **kwargs):  # add other arguments to __init__ if you need
         super(LRTensorBoard, self).__init__(log_dir=log_dir, **kwargs)
 
-    def on_epoch_end(self, epoch, logs=None):
+    def on_epoch_end(self,
+                     epoch,
+                     logs=None):
         logs.update({'lr': tf.keras.backend.eval(self.model.optimizer.lr)})
         super(LRTensorBoard, self).on_epoch_end(epoch, logs)

@@ -8,7 +8,6 @@ Reference guide
 .. automodule:: tf_crnn.data_handler
     :members:
     :undoc-members:
-    :exclude-members: serving_batch_filenames_fn
 
 .. automodule:: tf_crnn.config
     :members:
@@ -18,9 +17,11 @@ Reference guide
 .. automodule:: tf_crnn.model
     :members:
     :undoc-members:
-    :exclude-members: weightVar, biasVar, conv2d,
 
-.. automodule:: tf_crnn.loader
+.. automodule:: tf_crnn.callbacks
     :members:
     :undoc-members:
-    :exclude-members: PredictionModelBatch, _signature_def_to_tensors
+
+.. automodule:: tf_crnn.preprocessing
+    :members:
+    :undoc-members:

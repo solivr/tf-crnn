@@ -12,6 +12,24 @@ from .config import Params
 
 
 class ConvBlock(Layer):
+    """
+    Convolutional block class.
+    It is composed of a `Conv2D` layer, a `BatchNormaization` layer (optional),
+    a `MaxPool2D` layer (optional) and a `ReLu` activation.
+
+    :ivar features: number of features of the convolutional layer
+    :vartype features: int
+    :ivar kernel_size: size of the convolutional kernel
+    :vartype kernel_size: int
+    :ivar stride: stride of the convolutional layer
+    :vartype stride: int, int
+    :ivar cnn_padding: padding of the convolution ('same' or 'valid')
+    :vartype cnn_padding:
+    :ivar pool_size: size of the maxpooling
+    :vartype pool_size: int, int
+    :ivar batchnorm: use batch norm or not
+    :vartype batchnorm: bool
+    """
     def __init__(self,
                  features: int,
                  kernel_size: int,
@@ -29,7 +47,7 @@ class ConvBlock(Layer):
                                      renorm_clipping={'rmax': 1e2, 'rmin': 1e-1, 'dmax': 1e1},
                                      trainable=True) if batchnorm else None
         self.pool = MaxPool2D(pool_size=pool_size,
-                              padding='same') if pool_size > [1, 1] else None
+                              padding='same') if list(pool_size) > [1, 1] else None
 
         # for config purposes
         self._features = features
@@ -48,7 +66,12 @@ class ConvBlock(Layer):
         x = tf.nn.relu(x)
         return x
 
-    def get_config(self):
+    def get_config(self) -> dict:
+        """
+        Get a dictionary with all the necessary properties to recreate the same layer.
+
+        :return: dictionary containing the properties of the layer
+        """
         super_config = super(ConvBlock, self).get_config()
         config = {
             'features': self._features,
@@ -61,95 +84,16 @@ class ConvBlock(Layer):
         return dict(list(super_config.items()) + list(config.items()))
 
 
-# class CTCLoss(Layer):
-#     def __init__(self,
-#                  label_codes=[],
-#                  input_seq_len=[],
-#                  label_seq_length=[],
-#                  **kwargs):
-#         super(CTCLoss, self).__init__(**kwargs)
-#
-#         self.label_codes = label_codes
-#         self.input_seq_len = input_seq_len
-#         self.label_seq_length = label_seq_length
-#
-#     def call(self, inputs):
-#         y_pred = inputs
-#         return ctc_batch_cost(self.label_codes, y_pred, self.input_seq_len, self.label_seq_length)
-#
-#     def get_config(self):
-#         super_config = super(CTCLoss, self).get_config()
-#         return super_config
+def get_crnn_output(input_images,
+                    parameters: Params=None) -> tf.Tensor:
+    """
+    Creates the CRNN network and returns it's output.
+    Passes the `input_images` through the network and returns its output
 
-
-# class CERMetric(Layer):
-#     def __init__(self,
-#                  label_codes=[],
-#                  input_seq_len=[],
-#                  label_seq_length=[],
-#                  **kwargs):
-#         super(CERMetric, self).__init__(**kwargs)
-#
-#         self.label_codes = label_codes
-#         self.input_seq_len = input_seq_len
-#         self.label_seq_length = label_seq_length
-#
-#     def call(self, inputs):
-#         y_pred = inputs
-#         pred_codes_dense = ctc_decode(y_pred, tf.squeeze(self.input_seq_len, axis=-1), greedy=True)
-#         pred_codes_dense = tf.squeeze(tf.cast(pred_codes_dense[0], tf.int64), axis=0)  # only [0] if greedy=true
-#
-#         # create sparse tensor
-#         idx = tf.where(tf.not_equal(pred_codes_dense, -1))
-#         pred_codes_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
-#                                             tf.gather_nd(pred_codes_dense, idx),
-#                                             tf.cast(tf.shape(pred_codes_dense), tf.int64))
-#
-#         idx = tf.where(tf.not_equal(self.label_codes, 0))
-#         label_sparse = tf.SparseTensor(tf.cast(idx, tf.int64),
-#                                        tf.gather_nd(self.label_codes, idx),
-#                                        tf.cast(tf.shape(self.label_codes), tf.int64))
-#         label_sparse = tf.cast(label_sparse, tf.int64)
-#
-#         # Compute edit distance and total chars count
-#         distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, label_sparse, normalize=False))
-#         count_chars = tf.reduce_sum(self.label_seq_length)
-#
-#         return tf.divide(distance, tf.cast(count_chars, tf.float32), name='CER')
-#
-#     def get_config(self):
-#         super_config = super(CERMetric, self).get_config()
-#         return super_config
-
-# class CERMetric(Metric):
-#     def __init__(self):
-#         super(CERMetric, self).__init__()
-#
-#         self.distance = self.add_weight('distance')
-#         self.count_chars = self.add_weight('count_chars')
-#
-#     def update_state(self, y_true, y_pred, sample_weight=None):
-#         # y_pred needs to be decoded (its the logits)
-#         pred_codes_dense = ctc_decode(y_pred, pred_sequence_length, greedy=True)
-#
-#         # create a sparse tensor
-#         idx = tf.where(tf.not_equal(pred_codes_dense, -1))
-#         pred_codes_sparse = tf.SparseTensor(idx, tf.gather_nd(pred_codes_dense, idx), pred_codes_dense.get_shape())
-#
-#         distance = tf.reduce_sum(tf.edit_distance(pred_codes_sparse, y_true, normalize=False))
-#         self.distance.assign_add(distance)
-#
-#         self.count_chars.assign_add(tf.reduce_sum(true_sequence_length))
-#
-#     def result(self):
-#         return tf.divide(self.distance, self.count_chars) if tf.greater(self.count_chars, 0) else 1.0
-#
-#     def reset_states(self):
-#         self.distance.assign(0)
-#         self.count_chars.assign(0)
-
-
-def get_crnn_output(input_images, parameters: Params=None):
+    :param input_images: images to process (B, H, W, C)
+    :param parameters: parameters of the model (``Params``)
+    :return: the output of the CRNN model
+    """
 
     # params of the architecture
     cnn_features_list = parameters.cnn_features_list
@@ -185,8 +129,14 @@ def get_crnn_output(input_images, parameters: Params=None):
     return net_output
 
 
-def get_model_train(parameters: Params,
-                    model_path: str=None):
+def get_model_train(parameters: Params):
+    """
+    Constructs the full model for training.
+    Defines inputs and outputs, loss function and metric (CER).
+
+    :param parameters: parameters of the model (``Params``)
+    :return: the model (``tf.Keras.Model``)
+    """
 
     h, w = parameters.input_shape
     c = parameters.input_channels
@@ -241,7 +191,16 @@ def get_model_train(parameters: Params,
 
 
 def get_model_inference(parameters: Params,
-                        weights_dir: str=None):
+                        weights_path: str=None):
+    """
+    Constructs the full model for prediction.
+    Defines inputs and outputs, and loads the weights.
+
+
+    :param parameters: parameters of the model (``Params``)
+    :param weights_path: path to the weights (.h5 file)
+    :return: the model (``tf.Keras.Model``)
+    """
     h, w = parameters.input_shape
     c = parameters.input_channels
 
@@ -255,7 +214,7 @@ def get_model_inference(parameters: Params,
 
     model = Model(inputs=[input_images, input_seq_len, filename_images], outputs=[net_output, output_seq_len, filenames])
 
-    if weights_dir:
-        model.load_weights(weights_dir)
+    if weights_path:
+        model.load_weights(weights_path)
 
     return model

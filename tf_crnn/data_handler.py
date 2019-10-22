@@ -106,7 +106,16 @@ def augment_data(image: tf.Tensor,
 @tf.function
 def get_resized_width(image: tf.Tensor,
                       target_height: int,
-                      increment: int=CONST.DIMENSION_REDUCTION_W_POOLING):
+                      increment: int):
+    """
+    Resizes the image according to `target_height`.
+
+    :param image: image to resize
+    :param target_height: height of the resized image
+    :param increment: reduction factor due to pooling between input width and output width,
+                        this makes sure that the final width will be a multiple of increment
+    :return: resized image
+    """
 
     image_shape = tf.shape(image)
     image_ratio = tf.divide(image_shape[1], image_shape[0], name='ratio')
@@ -245,6 +254,19 @@ def dataset_generator(csv_filename: Union[List[str], str],
                       data_augmentation: bool=False,
                       num_epochs: int=None,
                       shuffle: bool=True):
+    """
+    Generates the dataset for the experiment.
+
+
+    :param csv_filename: Path to csv file containing the data
+    :param params: parameters df the experiment (``Params``)
+    :param use_labels: boolean to indicate dataset generation during training / evaluation (true) or prediction (false)
+    :param batch_size: size of the generated batches
+    :param data_augmentation: whether to use data augmentation strategies or not
+    :param num_epochs: number of epochs to repeat the dataset generation
+    :param shuffle: whether to suffle the data
+    :return: ``tf.data.Dataset``
+    """
     do_padding = True
 
     if use_labels:
@@ -357,7 +379,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
         if do_padding:
             with tf.name_scope('padding'):
                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
-                                                        increment=CONST.DIMENSION_REDUCTION_W_POOLING)
+                                                        increment=CONST.DIMENSION_REDUCTION_W_POOLING) # todo this needs to be updated
         # Resize
         else:
             image = tf.image.resize(image, size=params.input_shape)

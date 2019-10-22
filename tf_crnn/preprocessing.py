@@ -7,20 +7,22 @@ import numpy as np
 import os
 from .config import Params
 import pandas as pd
+from typing import List, Tuple
 from taputapu.io.image import get_image_shape_without_loading
 
 
-def _convert_label_to_dense_codes(labels,
+def _convert_label_to_dense_codes(labels: List[str],
                                   split_char: str,
                                   max_width: int,
                                   table_str2int: dict):
     """
+    Converts a list of formatted string to a dense matrix of codes
 
-    :param labels:
-    :param split_char:
-    :param max_width:
-    :param table_str2int:
-    :return:
+    :param labels: list of strings containing formatted labels
+    :param split_char: character to split the formatted label
+    :param max_width: maximum length of string label (max_n_chars = max_width_dense_codes)
+    :param table_str2int: mapping table between alphabet units and alphabet codes
+    :return: dense matrix N x max_width, list of the lengths of each string (length N)
     """
     labels_chars = [[c for c in label.split(split_char) if c] for label in labels]
     codes_list = [[table_str2int[c] for c in list_char] for list_char in labels_chars]
@@ -34,7 +36,8 @@ def _convert_label_to_dense_codes(labels,
     return dense_codes, seq_lengths
 
 
-def _compute_length_inputs(path, target_shape):
+def _compute_length_inputs(path: str,
+                           target_shape: Tuple[int, int]):
 
     w, h = get_image_shape_without_loading(path)
     ratio = w / h
@@ -49,11 +52,16 @@ def preprocess_csv(csv_filename: str,
                    parameters: Params,
                    output_csv_filename: str) -> int:
     """
+    Converts the original csv data to the format required by the experiment.
+    Removes the samples which labels have too many characters. Computes the widths of input images and removes the
+    samples which have more characters per label than image width. Converts the string labels to dense codes.
+    The output csv file contains the path to the image, the dense list of codes corresponding to the alphabets units
+    (which are padded with 0 if `len(label)` < `max_len`) and the length of the label sequence.
 
-    :param csv_filename:
-    :param parameters:
-    :param output_csv_filename:
-    :return:
+    :param csv_filename: path to csv file
+    :param parameters: parameters of the experiment (``Params``)
+    :param output_csv_filename: path to the output csv file
+    :return: number of samples in the output csv file
     """
 
     # Conversion table
@@ -115,11 +123,13 @@ def preprocess_csv(csv_filename: str,
     return len(new_dataframe)
 
 
-def data_preprocessing(params: Params) -> (str, str, str, str):
+def data_preprocessing(params: Params) -> (str, str, int, int):
     """
+    Preporcesses the data for the experiment (training and evaluation data).
+    Exports the updated csv files into `<output_model_dir>/preprocessed/updated_{eval,train}.csv`
 
-    :param params:
-    :return:
+    :param params: parameters of the experiment (``Params``)
+    :return: output path files, number of samples (for train and evaluation data)
     """
     output_dir = os.path.join(params.output_model_dir, 'preprocessed')
     if not os.path.exists(output_dir):

@@ -9,9 +9,7 @@ import string
 from functools import reduce
 from glob import glob
 from typing import List
-
 import pandas as pd
-
 from tf_crnn.hlp.alphabet_helpers import load_lookup_from_json, map_lookup
 
 
@@ -21,7 +19,7 @@ class CONST:
 
 class Alphabet:
     """
-    Object for alphabet / symbols units.
+    Class for alphabet / symbols units.
 
     :ivar _blank_symbol: Blank symbol used for CTC
     :vartype _blank_symbol: str
@@ -143,35 +141,52 @@ class Alphabet:
 
 class Params:
     """
-    Object for general parameters
+    Class for parameters of the model and the experiment
 
     :ivar input_shape: input shape of the image to batch (this is the shape after data augmentation).
         The original will either be resized or pad depending on its original size
     :vartype input_shape: Tuple[int, int]
-    :ivar input_channels: number of color channels for input image
+    :ivar input_channels: number of color channels for input image (default: 1)
     :vartype input_channels: int
-    :ivar csv_delimiter: character to delimit csv input files
+    :ivar cnn_features_list: a list of length `n_layers` containing the number of features for each convolutionl layer
+        (default: [16, 32, 64, 96, 128])
+    :vartype cnn_features_list: List(int)
+    :ivar cnn_kernel_size: a list of length `n_layers` containing the size of the kernel for each convolutionl layer
+        (default: [3, 3, 3, 3, 3])
+    :vartype cnn_kernel_size: List(int)
+    :ivar cnn_stride_size: a list of length `n_layers` containing the stride size each convolutionl layer
+        (default: [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1)])
+    :vartype cnn_stride_size: List((int, int))
+    :ivar cnn_pool_size: a list of length `n_layers` containing the pool size each MaxPool layer
+        default: ([(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
+    :vartype cnn_pool_size: List((int, int))
+    :ivar cnn_batch_norm: a list of length `n_layers` containing a bool that indicated wether or not to use batch normalization
+        (default: [False, False, False, False, False])
+    :vartype cnn_batch_norm: List(bool)
+    :ivar rnn_units: a list containing the number of units per rnn layer (default: 256)
+    :vartype rnn_units: List(int)
+    :ivar num_beam_paths: number of paths (transcriptions) to return for ctc beam search (only used when predicting)
+    :vartype num_beam_paths: int
+    :ivar csv_delimiter: character to delimit csv input files (default: ';')
     :vartype csv_delimiter: str
-    :ivar string_split_delimiter: character that delimits each alphabet unit in the labels
+    :ivar string_split_delimiter: character that delimits each alphabet unit in the labels (default: '|')
     :vartype string_split_delimiter: str
-    :ivar lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
-    :vartype lookup_alphabet_file: str
     :ivar csv_files_train: csv filename which contains the (path;label) of each training sample
     :vartype csv_files_train: str
     :ivar csv_files_eval: csv filename which contains the (path;label) of each eval sample
     :vartype csv_files_eval: str
-    :ivar output_model_dir: output directory where the model will be saved and exported
-    :vartype output_model_dir: str
-    :ivar keep_prob_dropout: keep probability
-    :vartype keep_prob_dropout: float
-    :ivar num_beam_paths: number of paths (transcriptions) to return for ctc beam search (only used when predicting)
-    :vartype num_beam_paths: int
-    :ivar data_augmentation: if True augments data on the fly
+    :ivar lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
+    :vartype lookup_alphabet_file: str
+    :ivar blank_symbol: symbol for to be considered as blank by the CTC decoder (default: '$')
+    :vartype blank_symbol: str
+    :ivar max_chars_per_string: maximum characters per sample (to avoid CTC decoder errors) (default: 75)
+    :vartype max_chars_per_string: int
+    :ivar data_augmentation: if True augments data on the fly (default: true)
     :vartype data_augmentation: bool
-    :ivar data_augmentation_max_rotation: max permitted roation to apply to image during training (radians)
+    :ivar data_augmentation_max_rotation: max permitted roation to apply to image during training in radians (default: 0.005)
     :vartype data_augmentation_max_rotation: float
-    :ivar input_data_n_parallel_calls: number of parallel calls to make when using Dataset.map()
-    :vartype input_data_n_parallel_calls: int
+    :ivar data_augmentation_max_slant: maximum angle for slant augmentation (default: 0.7)
+    :vartype data_augmentation_max_slant: float
     :ivar n_epochs: numbers of epochs to run the training (default: 50)
     :vartype n_epochs: int
     :ivar train_batch_size: batch size during training (default: 64)
@@ -182,11 +197,13 @@ class Params:
     :vartype learning_rate: float
     :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
     :vartype evaluate_every_epoch: int
-    :ivar save_interval: save the model every 'save_interval' epoch (default: 10)
+    :ivar save_interval: save the model every 'save_interval' epoch (default: 20)
     :vartype save_interval: int
-    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
+    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam')
     :vartype optimizer: str
-    :ivar restore_model: boolean to continue training with saved weights
+    :ivar output_model_dir: output directory where the model will be saved and exported
+    :vartype output_model_dir: str
+    :ivar restore_model: boolean to continue training with saved weights (default: False)
     :vartype restore_model: bool
     """
     def __init__(self, **kwargs):
@@ -199,8 +216,8 @@ class Params:
         self.cnn_pool_size = kwargs.get('cnn_pool_size', [(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
         self.cnn_batch_norm = kwargs.get('cnn_batch_norm', [False, False, False, False, False])
         self.rnn_units = kwargs.get('rnn_units', [256, 256])
-        self._keep_prob_dropout = kwargs.get('keep_prob', 0.5)
-        self.num_beam_paths = kwargs.get('num_beam_paths', 3)
+        # self._keep_prob_dropout = kwargs.get('keep_prob_dropout', 0.5)
+        self.num_beam_paths = kwargs.get('num_beam_paths', 1)
         # csv params
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
         self.string_split_delimiter = kwargs.get('string_split_delimiter', '|')
@@ -249,6 +266,7 @@ class Params:
     def show_experiment_params(self) -> dict:
         """
         Returns a dictionary with the variables of the class.
+
         :return:
         """
         return vars(self)
@@ -256,16 +274,21 @@ class Params:
     def _assign_alphabet(self):
         self.alphabet = Alphabet(lookup_alphabet_file=self.lookup_alphabet_file, blank_symbol=self.blank_symbol)
 
-    @property
-    def keep_prob_dropout(self):
-        return self._keep_prob_dropout
-
-    @keep_prob_dropout.setter
-    def keep_prob_dropout(self, value):
-        assert (0.0 < value <= 1.0), 'Must be 0.0 < value <= 1.0'
-        self._keep_prob_dropout = value
+    # @property
+    # def keep_prob_dropout(self):
+    #     return self._keep_prob_dropout
+    #
+    # @keep_prob_dropout.setter
+    # def keep_prob_dropout(self, value):
+    #     assert (0.0 < value <= 1.0), 'Must be 0.0 < value <= 1.0'
+    #     self._keep_prob_dropout = value
 
     def to_dict(self) -> dict:
+        """
+        Returns the parameters as a dictionary
+
+        :return:
+        """
         new_dict = self.__dict__.copy()
         del new_dict['alphabet']
         del new_dict['downscale_factor']
@@ -273,6 +296,12 @@ class Params:
 
     @classmethod
     def from_json_file(cls, json_file: str):
+        """
+        Given a json file, creates a ``Params`` object.
+
+        :param json_file: path to the json file
+        :return: ``Params`` object
+        """
         with open(json_file, 'r') as file:
             config = json.load(file)
 

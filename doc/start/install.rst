@@ -14,57 +14,57 @@ When using Anaconda (or Miniconda), conda will install automatically the compati
 You can find more information about the installation procedures of CUDA and CuDNN with Anaconda
 `here <https://www.anaconda.com/blog/developer-blog/tensorflow-in-anaconda/>`_.
 
-Using ``pip``
-^^^^^^^^^^^^^
+..    Using ``pip``
+    ^^^^^^^^^^^^^
 
-Before using ``tf_crnn`` we recommend creating a virtual environment (python 3.5).
-Then, install the dependencies using Github repository's ``setup.py`` file. ::
+    Before using ``tf_crnn`` we recommend creating a virtual environment (python 3.5).
+    Then, install the dependencies using Github repository's ``setup.py`` file. ::
 
-    pip install git+https://github.com/solivr/tf-crnn
+        pip install git+https://github.com/solivr/tf-crnn
 
-You will then need to install CUDA and CuDNN libraries manually.
-
-
-Using Docker
-^^^^^^^^^^^^
-(thanks to `PonteIneptique <https://github.com/PonteIneptique>`_)
-
-The ``Dockerfile`` in the root directory allows you to run the whole program as a Docker Nvidia Tensorflow GPU container.
-This is potentially helpful to deal with external dependencies like CUDA and the likes.
-
-You can follow installations processes here :
-
-- docker-ce : `Ubuntu <https://docs.docker.com/install/linux/docker-ce/ubuntu/#os-requirements>`_
-- nvidia-docker : `Ubuntu <https://nvidia.github.io/nvidia-docker/>`_
-
-Once this is installed, we will need to build the image of the container by doing : ::
-
-    nvidia-docker build . --tag tf-crnn
+    You will then need to install CUDA and CuDNN libraries manually.
 
 
-Our container model is now named ``tf-crnn``.
-We will be able to run it from ``nvidia-docker run -it tf-crnn:latest bash``
-which will open a bash directory exactly where you are. Although, we recommend using ::
+..    Using Docker
+    ^^^^^^^^^^^^
+    (thanks to `PonteIneptique <https://github.com/PonteIneptique>`_)
 
-    nvidia-docker run -it -p 8888:8888 -p 6006:6006 -v /absolute/path/to/here/config:./config -v $INPUT_DATA:/sources  tf-crnn:latest bash
+    The ``Dockerfile`` in the root directory allows you to run the whole program as a Docker Nvidia Tensorflow GPU container.
+    This is potentially helpful to deal with external dependencies like CUDA and the likes.
 
-where ``$INPUT_DATA`` should be replaced by the directory where you have your training and testing data.
-This will get mounted on the ``sources`` folder. We propose to mount by default ``./config`` to the current ``./config`` directory.
-Path need to be absolute path. We also recommend to change ::
+    You can follow installations processes here :
 
-    //...
-    "output_model_dir" : "/.output/"
+    - docker-ce : `Ubuntu <https://docs.docker.com/install/linux/docker-ce/ubuntu/#os-requirements>`_
+    - nvidia-docker : `Ubuntu <https://nvidia.github.io/nvidia-docker/>`_
 
+    Once this is installed, we will need to build the image of the container by doing : ::
 
-to ::
-
-    //...
-    "output_model_dir" : "/config/output"
+        nvidia-docker build . --tag tf-crnn
 
 
-**Do not forget** to rename your training and testing file path, as well as renaming the path to their
-image by ``/sources/.../file.{png,jpg}``
+    Our container model is now named ``tf-crnn``.
+    We will be able to run it from ``nvidia-docker run -it tf-crnn:latest bash``
+    which will open a bash directory exactly where you are. Although, we recommend using ::
+
+        nvidia-docker run -it -p 8888:8888 -p 6006:6006 -v /absolute/path/to/here/config:./config -v $INPUT_DATA:/sources  tf-crnn:latest bash
+
+    where ``$INPUT_DATA`` should be replaced by the directory where you have your training and testing data.
+    This will get mounted on the ``sources`` folder. We propose to mount by default ``./config`` to the current ``./config`` directory.
+    Path need to be absolute path. We also recommend to change ::
+
+        //...
+        "output_model_dir" : "/.output/"
 
 
-.. note:: if you are uncomfortable with bash, you can always replace bash by ``ipython3 notebook --allow-root``
-    and go to your browser on ``http://localhost:8888/`` . A token will be shown in the terminal
+    to ::
+
+        //...
+        "output_model_dir" : "/config/output"
+
+
+    **Do not forget** to rename your training and testing file path, as well as renaming the path to their
+    image by ``/sources/.../file.{png,jpg}``
+
+
+    .. note:: if you are uncomfortable with bash, you can always replace bash by ``ipython3 notebook --allow-root``
+        and go to your browser on ``http://localhost:8888/`` . A token will be shown in the terminal

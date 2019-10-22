@@ -183,6 +183,7 @@ epub_exclude_files = ['search.html']
 autodoc_mock_imports = [
     # 'numpy',
     'tensorflow',
+    'tensorflow_addons',
     'pandas',
     'typing',
     'cv2'

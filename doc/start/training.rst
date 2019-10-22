@@ -29,48 +29,42 @@ Some lookup tables are already provided as examples in ``data/alphabet/``.
 
 For example to transcribe words that contain only the characters *'abcdefg'*, one possible lookup table would be : ::
 
-    {'a': 0, 'b': 1, 'c': 2, 'd': 3. 'e': 4, 'f': 5, 'g': 6}
+    {'a': 1, 'b': 2, 'c': 3, 'd': 4. 'e': 5, 'f': 6, 'g': 7}
 
 The lookup table / dictionary needs to be saved in a json file.
 
 Config file (with ``sacred``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Set the parameters of the experiment in ``config_template.json``. The file looks like this : ::
+Set the parameters of the experiment in ``config.json``. The file looks like this : ::
 
     {
-      "training_params" : {
-        "learning_rate" : 1e-3,
-        "learning_decay_rate" : 0.95,
-        "learning_decay_steps" : 5000,
-        "save_interval" : 1e3,
-        "n_epochs" : 50,
-        "train_batch_size" : 128,
-        "eval_batch_size" : 128
-      },
-      "input_shape" : [32, 304],
-      "string_split_delimiter" : "|",
-      "csv_delimiter" : ";",
-      "data_augmentation_max_rotation" : 0.1,
-      "input_data_n_parallel_calls" : 4,
-      "lookup_alphabet_file" : "./data/alphabet/lookup_letters_digits_symbols.json",
-      "csv_files_train" : ["./data/csv/train_sample.csv"],
-      "csv_files_eval" : ["./data/csv/eval_sample.csv"],
-      "output_model_dir" : "./output/"
+      "lookup_alphabet_file" : "./data/alphabet/lookup.json",
+      "csv_files_train" : "./data/csv_experiments/lines_train_tf_format.csv",
+      "csv_files_eval" : "./data/csv_experiments/lines_validation1_tf_format.csv",
+      "output_model_dir" : "./output_model",
+      "num_beam_paths" : 1,
+      "cnn_batch_norm" : [true, true, true, true, true],
+      "max_chars_per_string" : 80,
+      "n_epochs" : 50,
+      "train_batch_size" : 128,
+      "eval_batch_size" : 128,
+      "learning_rate": 1e-4,
+      "input_shape" : [128, 1400],
+      "rnn_units" : [256, 256, 256],
+      "restore_model" : false
     }
-
 
 In order to use your data, you should change the parameters ``csv_files_train``, ``csv_files_eval`` and probably ``lookup_alphabet_file``.
 
-All the configurable parameters can be found in classes ``tf_crnn.config.Params`` and ``tf_crnn.config.TrainingParams``,
-which can be added to the config file if needed.
+All the configurable parameters can be found in class ``tf_crnn.config.Params``, which can be added to the config file if needed.
 
 Training
 ^^^^^^^^
 
-Once you have your input csv and alphabet file completed, and the parameters set in ``config_template.json``,
+Once you have your input csv and alphabet file completed, and the parameters set in ``config.json``,
 we will use ``sacred`` syntax to launch the training : ::
 
-    python train.py with config_template.json
+    python train.py with config.json
 
 The saved model will then be exported to the folder specified in the config file (``output_model_dir``).
