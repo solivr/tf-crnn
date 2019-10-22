@@ -5,11 +5,11 @@ __license__ = "GPL"
 import logging
 logging.getLogger("tensorflow").setLevel(logging.INFO)
 
-from src.config import Params
-from src.model import get_model_train
-from src.preprocessing import data_preprocessing
-from src.data_handler import dataset_generator
-from src.callbacks import CustomLoaderCallback, CustomSavingCallback, LRTensorBoard, EPOCH_FILENAME, FOLDER_SAVED_MODEL
+from tf_crnn.config import Params
+from tf_crnn.model import get_model_train
+from tf_crnn.preprocessing import data_preprocessing
+from tf_crnn.data_handler import dataset_generator
+from tf_crnn.callbacks import CustomLoaderCallback, CustomSavingCallback, LRTensorBoard, EPOCH_FILENAME, FOLDER_SAVED_MODEL
 import tensorflow as tf
 import numpy as np
 import os

@@ -2,13 +2,16 @@
 __author__ = "solivr"
 __license__ = "GPL"
 
-from src.data_handler import dataset_generator
-from src.config import Params
-from src.model import get_model_inference
 import os
 from glob import glob
+
 import click
-from src.callbacks import CustomPredictionSaverCallback, FOLDER_SAVED_MODEL
+from tf_crnn.callbacks import CustomPredictionSaverCallback, FOLDER_SAVED_MODEL
+from tf_crnn.config import Params
+from tf_crnn.data_handler import dataset_generator
+
+from tf_crnn.model import get_model_inference
+
 
 @click.command()
 @click.option('--csv_filename', help='A csv file containing the path to the images to predict')

@@ -4,12 +4,14 @@ __license__ = "GPL"
 
 import os
 from glob import glob
-from src.config import Params
-from src.callbacks import CustomLoaderCallback
-from src.preprocessing import preprocess_csv
-from src.data_handler import dataset_generator
-from src.model import get_model_train
+
 import click
+from tf_crnn.callbacks import CustomLoaderCallback
+from tf_crnn.config import Params
+from tf_crnn.data_handler import dataset_generator
+from tf_crnn.preprocessing import preprocess_csv
+
+from tf_crnn.model import get_model_train
 
 
 @click.command()

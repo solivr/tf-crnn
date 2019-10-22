@@ -5,47 +5,44 @@ __license__ = "GPL"
 from typing import List, Union
 import csv
 import json
+import numpy as np
 
 
-def get_alphabet_units_form_csv(csv_filename: str) -> List[str]:
+def get_alphabet_from_input_data(csv_filename: str, split_char: str='|'):
+    """
+    Get alphabet units from the input_data csv file (which contains in each row the tuple
+    (filename image segment, transcription formatted))
+
+    :param csv_filename: csv file containing the input data
+    :param split_char: splitting character in input_data separting the alphabet units
+    :return:
+    """
+    with open(csv_filename, 'r', encoding='utf8') as f:
+        csvreader = csv.reader(f, delimiter=';', quoting=csv.QUOTE_ALL)
+        transcriptions = [row[1].split(split_char) for row in csvreader]
+
+    unique_units = np.unique([chars for list_chars in transcriptions for chars in list_chars])
+
+    return unique_units
+
+
+def get_abbreviations_from_csv(csv_filename: str) -> List[str]:
     with open(csv_filename, 'r', encoding='utf8') as f:
         csvreader = csv.reader(f, delimiter='\n')
         alphabet_units = [row[0] for row in csvreader]
     return alphabet_units
 
 
-def get_abbreviations_from_csv(csv_filename: str = './data/selected_abbreviations_n200.csv') -> List[str]:
-    return get_alphabet_units_form_csv(csv_filename)
-
-
-def make_json_lookup_alphabet(string_chars: str=None, csv_filenames: Union[List[str], str]=None) -> dict:
+def make_json_lookup_alphabet(string_chars: str=None) -> dict:
     """
 
     :param string_chars: for example string.ascii_letters, string.digits
-    :param csv_filenames: csv files containing chars or words in each line.
-                    Each line will be considered as a unit in the alphabet
     :return:
     """
     lookup = dict()
-    offset = 0
     if string_chars:
         # Add characters to lookup table
         lookup.update({char: ord(char) for char in string_chars})
-        # Add offset to the codes of alphabets units
-        offset = max(lookup.values()) + 1
-
-    if isinstance(csv_filenames, list):
-        for file in csv_filenames:
-            # Update lookup table with alphabets units from csv file
-            alphabet_units = get_alphabet_units_form_csv(file)
-            lookup.update({abbrev: offset + i for i, abbrev in enumerate(alphabet_units)})
-
-            # Update offset
-            offset = max(lookup.values()) + 1
-
-    elif isinstance(csv_filenames, str):
-        alphabet_units = get_alphabet_units_form_csv(csv_filenames)
-        lookup.update({abbrev: offset + i for i, abbrev in enumerate(alphabet_units)})
 
     return map_lookup(lookup)
 
@@ -73,8 +70,9 @@ def load_lookup_from_json(json_filenames: Union[List[str], str])-> dict:
 
 def map_lookup(lookup_table: dict, unique_entry: bool=True)-> dict:
     """
-    Converts an existing lookup table with minimal range code ([0, len(lookup_table)-1])
+    Converts an existing lookup table with minimal range code ([1, len(lookup_table)-1])
     and avoids multiple instances of the same code label (bijectivity)
+
     :param lookup_table: dictionary to be mapped {alphabet_unit : code label}
     :param unique_entry: If each alphabet unit has a unique code and each code a unique alphabet unique ('bijective'),
                         only True is implemented for now
@@ -88,7 +86,7 @@ def map_lookup(lookup_table: dict, unique_entry: bool=True)-> dict:
 
     # If each alphabet unit has a unique code and each code a unique alphabet unique ('bijective')
     if unique_entry:
-        mapped_lookup = [[tp[0], i] for i, tp in enumerate(tuple_char_code)]
+        mapped_lookup = [[tp[0], i + 1] for i, tp in enumerate(tuple_char_code)]
     else:
         raise NotImplementedError
         # Todo

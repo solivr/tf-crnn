@@ -2,14 +2,17 @@
 __author__ = 'solivr'
 __license__ = "GPL"
 
-import os
-import json
-from .hlp.alphabet_helpers import load_lookup_from_json, map_lookup
-from glob import glob
-import string
 import csv
-import pandas as pd
+import json
+import os
+import string
+from functools import reduce
+from glob import glob
 from typing import List
+
+import pandas as pd
+
+from tf_crnn.hlp.alphabet_helpers import load_lookup_from_json, map_lookup
 
 
 class CONST:
@@ -37,16 +40,22 @@ class Alphabet:
             lookup_alphabet = load_lookup_from_json(lookup_alphabet_file)
             # Blank symbol must have the largest value
             if self._blank_symbol in lookup_alphabet.keys():
-                # # TODO : check if blank symbol is the last one
-                # assert lookup_alphabet_file[self._blank_symbol] == max(lookup_alphabet.values()), \
-                #     "Blank symbol should have the largest code integer"
+
+                # TODO : check if blank symbol is the last one
+                assert lookup_alphabet[self._blank_symbol] == max(lookup_alphabet.values()), \
+                    "Blank symbol should have the largest code integer"
                 lookup_alphabet[self._blank_symbol] = max(lookup_alphabet.values()) + 1
             else:
                 lookup_alphabet.update({self._blank_symbol: max(lookup_alphabet.values()) + 1})
 
             self._alphabet_units = list(lookup_alphabet.keys())
             self._codes = list(lookup_alphabet.values())
-            self._nclasses = max(self.codes) + 1  # n_classes should be + 1 of labels codes
+            self._nclasses = len(self.codes) + 1  # n_classes should be + 1 of labels codes
+
+            if 0 in self._codes:
+                raise ValueError('0 code is in the lookup table, you should''nt use it.')
+
+            self.lookup_int2str = dict(zip(self.codes, self.alphabet_units))
 
     def check_input_file_alphabet(self, csv_filenames: List[str],
                                   discarded_chars: str=';|{}'.format(string.whitespace[1:]),
@@ -67,7 +76,7 @@ class Alphabet:
             input_chars_set = set()
 
             with open(filename, 'r', encoding='utf8') as f:
-                csvreader = csv.reader(f, delimiter=csv_delimiter)
+                csvreader = csv.reader(f, delimiter=csv_delimiter, escapechar='\\', quoting=0)
                 for line in csvreader:
                     input_chars_set.update(line[1])
 
@@ -132,49 +141,6 @@ class Alphabet:
         return self._alphabet_units
 
 
-class TrainingParams:
-    """
-    Object for parameters related to the training.
-
-    :ivar n_epochs: numbers of epochs to run the training (default: 50)
-    :vartype n_epochs: int
-    :ivar train_batch_size: batch size during training (default: 64)
-    :vartype train_batch_size: int
-    :ivar eval_batch_size: batch size during evaluation (default: 128)
-    :vartype eval_batch_size: int
-    :ivar learning_rate: initial learning rate (default: 1e-4)
-    :vartype learning_rate: float
-    :ivar learning_decay_rate: decay rate for exponential learning rate (default: .96)
-    :vartype learning_decay_rate: float
-    :ivar learning_decay_steps: decay steps for exponential learning rate (default: 1000)
-    :vartype learning_decay_steps: int
-    :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
-    :vartype evaluate_every_epoch: int
-    :ivar save_interval: save the model every 'save_interval' step (default: 1e3)
-    :vartype save_interval: int
-    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
-    :vartype optimizer: str
-    """
-    def __init__(self, **kwargs):
-        self.n_epochs = kwargs.get('n_epochs', 50)
-        self.train_batch_size = kwargs.get('train_batch_size', 64)
-        self.eval_batch_size = kwargs.get('eval_batch_size', 128)
-        # Initial value of learining rate (exponential learning rate is used)
-        self.learning_rate = kwargs.get('learning_rate', 1e-4)
-        # Learning rate decay for exponential learning rate
-        self.learning_decay_rate = kwargs.get('learning_decay_rate', 0.96)
-        # Decay steps for exponential learning rate
-        self.learning_decay_steps = kwargs.get('learning_decay_steps', 1000)
-        self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
-        self.save_interval = kwargs.get('save_interval', 1e3)
-        self.optimizer = kwargs.get('optimizer', 'adam')
-
-        assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
-
-    def to_dict(self) -> dict:
-        return self.__dict__
-
-
 class Params:
     """
     Object for general parameters
@@ -188,8 +154,6 @@ class Params:
     :vartype csv_delimiter: str
     :ivar string_split_delimiter: character that delimits each alphabet unit in the labels
     :vartype string_split_delimiter: str
-    :ivar num_gpus: number of gpus to use
-    :vartype num_gpus: int
     :ivar lookup_alphabet_file: json file that contains the mapping alphabet units <-> codes
     :vartype lookup_alphabet_file: str
     :ivar csv_files_train: csv filename which contains the (path;label) of each training sample
@@ -208,24 +172,79 @@ class Params:
     :vartype data_augmentation_max_rotation: float
     :ivar input_data_n_parallel_calls: number of parallel calls to make when using Dataset.map()
     :vartype input_data_n_parallel_calls: int
+    :ivar n_epochs: numbers of epochs to run the training (default: 50)
+    :vartype n_epochs: int
+    :ivar train_batch_size: batch size during training (default: 64)
+    :vartype train_batch_size: int
+    :ivar eval_batch_size: batch size during evaluation (default: 128)
+    :vartype eval_batch_size: int
+    :ivar learning_rate: initial learning rate (default: 1e-4)
+    :vartype learning_rate: float
+    :ivar evaluate_every_epoch: evaluate every 'evaluate_every_epoch' epoch (default: 5)
+    :vartype evaluate_every_epoch: int
+    :ivar save_interval: save the model every 'save_interval' epoch (default: 10)
+    :vartype save_interval: int
+    :ivar optimizer: which optimizer to use ('adam', 'rms', 'ada') (default: 'adam)
+    :vartype optimizer: str
+    :ivar restore_model: boolean to continue training with saved weights
+    :vartype restore_model: bool
     """
     def __init__(self, **kwargs):
-        self.input_shape = kwargs.get('input_shape', (32, 100))
+        # model params
+        self.input_shape = kwargs.get('input_shape', (96, 1400))
         self.input_channels = kwargs.get('input_channels', 1)
+        self.cnn_features_list = kwargs.get('cnn_features_list', [16, 32, 64, 96, 128])
+        self.cnn_kernel_size = kwargs.get('cnn_kernel_size', [3, 3, 3, 3, 3])
+        self.cnn_stride_size = kwargs.get('cnn_stride_size', [(1, 1), (1, 1), (1, 1), (1, 1), (1, 1)])
+        self.cnn_pool_size = kwargs.get('cnn_pool_size', [(2, 2), (2, 2), (2, 2), (2, 2), (1, 1)])
+        self.cnn_batch_norm = kwargs.get('cnn_batch_norm', [False, False, False, False, False])
+        self.rnn_units = kwargs.get('rnn_units', [256, 256])
+        self._keep_prob_dropout = kwargs.get('keep_prob', 0.5)
+        self.num_beam_paths = kwargs.get('num_beam_paths', 3)
+        # csv params
         self.csv_delimiter = kwargs.get('csv_delimiter', ';')
         self.string_split_delimiter = kwargs.get('string_split_delimiter', '|')
-        self.num_gpus = kwargs.get('num_gpus', 1)
-        self.lookup_alphabet_file = kwargs.get('lookup_alphabet_file')
         self.csv_files_train = kwargs.get('csv_files_train')
         self.csv_files_eval = kwargs.get('csv_files_eval')
-        self.output_model_dir = kwargs.get('output_model_dir')
-        self._keep_prob_dropout = kwargs.get('keep_prob')
-        self.num_beam_paths = kwargs.get('num_beam_paths', 3)
+        # alphabet params
+        self.blank_symbol = kwargs.get('blank_symbol', '$')
+        self.max_chars_per_string = kwargs.get('max_chars_per_string', 75)
+        self.lookup_alphabet_file = kwargs.get('lookup_alphabet_file')
+        # data augmentation params
         self.data_augmentation = kwargs.get('data_augmentation', True),
-        self.data_augmentation_max_rotation = kwargs.get('data_augmentation_max_rotation', 0.05)
-        self.input_data_n_parallel_calls = kwargs.get('input_data_n_parallel_calls', 4)
+        self.data_augmentation_max_rotation = kwargs.get('data_augmentation_max_rotation', 0.005)
+        self.data_augmentation_max_slant = kwargs.get('data_augmentation_max_slant', 0.7)
+        # training params
+        self.n_epochs = kwargs.get('n_epochs', 50)
+        self.train_batch_size = kwargs.get('train_batch_size', 64)
+        self.eval_batch_size = kwargs.get('eval_batch_size', 128)
+        self.learning_rate = kwargs.get('learning_rate', 1e-4)
+        self.optimizer = kwargs.get('optimizer', 'adam')
+        self.output_model_dir = kwargs.get('output_model_dir', '')
+        self.evaluate_every_epoch = kwargs.get('evaluate_every_epoch', 5)
+        self.save_interval = kwargs.get('save_interval', 20)
+        self.restore_model = kwargs.get('restore_model', False)
 
         self._assign_alphabet()
+
+        cnn_params = zip(self.cnn_pool_size, self.cnn_stride_size)
+        self.downscale_factor = reduce(lambda i, j: i * j, map(lambda k: k[0][1] * k[1][1], cnn_params))
+
+        # TODO add additional checks for the architecture
+        assert len(self.cnn_features_list) == len(self.cnn_kernel_size) == len(self.cnn_stride_size) \
+               == len(self.cnn_pool_size) == len(self.cnn_batch_norm), \
+            "Length of parameters of model are not the same, check that all the layers parameters have the same length."
+
+        max_input_width = (self.max_chars_per_string + 1) * self.downscale_factor
+        assert max_input_width <= self.input_shape[1], "Maximum length of labels is {}, input width should be greater or " \
+                                                       "equal to {} but is {}".format(self.max_chars_per_string,
+                                                                                      max_input_width,
+                                                                                      self.input_shape[1])
+
+        assert self.optimizer in ['adam', 'rms', 'ada'], 'Unknown optimizer {}'.format(self.optimizer)
+
+        if os.path.isdir(self.output_model_dir):
+            print('WARNING : The output directory {} already exists.'.format(self.output_model_dir))
 
     def show_experiment_params(self) -> dict:
         """
@@ -235,7 +254,7 @@ class Params:
         return vars(self)
 
     def _assign_alphabet(self):
-        self.alphabet = Alphabet(lookup_alphabet_file=self.lookup_alphabet_file)
+        self.alphabet = Alphabet(lookup_alphabet_file=self.lookup_alphabet_file, blank_symbol=self.blank_symbol)
 
     @property
     def keep_prob_dropout(self):
@@ -245,6 +264,19 @@ class Params:
     def keep_prob_dropout(self, value):
         assert (0.0 < value <= 1.0), 'Must be 0.0 < value <= 1.0'
         self._keep_prob_dropout = value
+
+    def to_dict(self) -> dict:
+        new_dict = self.__dict__.copy()
+        del new_dict['alphabet']
+        del new_dict['downscale_factor']
+        return new_dict
+
+    @classmethod
+    def from_json_file(cls, json_file: str):
+        with open(json_file, 'r') as file:
+            config = json.load(file)
+
+        return cls(**config)
 
 
 def import_params_from_json(model_directory: str=None, json_filename: str=None) -> dict:
