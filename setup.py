@@ -5,22 +5,24 @@ __license__ = "GPL"
 from setuptools import setup, find_packages
 
 setup(name='tf_crnn',
-      version='0.5.1',
+      version='0.6.0',
       license='GPL',
       author='Sofia Ares Oliveira',
       url='https://github.com/solivr/tf-crnn',
       description='TensorFlow Convolutional Recurrent Neural Network (CRNN)',
       install_requires=[
-            'tensorflow-gpu>=1.9',
             'imageio',
             'numpy',
             'tqdm',
             'sacred',
-            'tensorflow-tensorboard',
             'better_exceptions',
             'opencv-python',
-            'pandas'
+            'pandas',
+            'click',
+            'tensorflow-addons>=0.5',
+            'tensorflow-gpu>=2.0'
       ],
+      dependency_links=['https://github.com/solivr/taputapu/tarball/master#egg=package-1.0'],
       extras_require={
             'doc': [
                   'sphinx',

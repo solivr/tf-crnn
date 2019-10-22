@@ -1,20 +1,18 @@
-name: tf_crnn
-channels:
-  - defaults
+name: crnn-tf2
 dependencies:
+  - python=3.6
   - imageio
   - numpy
-  - opencv
-  - python=3.5
-  - tensorboard
-  - tensorflow-gpu
   - tqdm
   - pandas
+  - click
+  - pip
   - pip:
-    - better-exceptions
     - sacred
-    - sphinx==1.8.1
-    - sphinx-autodoc-typehints==1.3.0
-    - sphinx-rtd-theme==0.4.1
-prefix: /home/user/anaconda3/envs/tf_crnn
-
+    - opencv-python
+    - tensorflow-gpu>=2.0
+    - tensorflow-addons>=0.5
+    - git+https://github.com/solivr/taputapu.git#egg=taputapu
+    - sphinx
+    - sphinx-autodoc-typehints
+    - sphinx-rtd-theme
