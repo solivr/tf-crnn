@@ -8,9 +8,8 @@ import os
 import string
 from functools import reduce
 from glob import glob
-from typing import List
+from typing import List, Union
 import pandas as pd
-from tf_crnn.hlp.alphabet_helpers import load_lookup_from_json, map_lookup
 
 
 class CONST:
@@ -35,7 +34,7 @@ class Alphabet:
         self._blank_symbol = blank_symbol
 
         if lookup_alphabet_file:
-            lookup_alphabet = load_lookup_from_json(lookup_alphabet_file)
+            lookup_alphabet = self.load_lookup_from_json(lookup_alphabet_file)
             # Blank symbol must have the largest value
             if self._blank_symbol in lookup_alphabet.keys():
 
@@ -87,6 +86,32 @@ class Alphabet:
                                                                                          filename, extra_chars)
 
     @classmethod
+    def map_lookup(cls, lookup_table: dict, unique_entry: bool = True) -> dict:
+        """
+        Converts an existing lookup table with minimal range code ([1, len(lookup_table)-1])
+        and avoids multiple instances of the same code label (bijectivity)
+
+        :param lookup_table: dictionary to be mapped {alphabet_unit : code label}
+        :param unique_entry: If each alphabet unit has a unique code and each code a unique alphabet unique ('bijective'),
+                            only True is implemented for now
+        :return: a mapped dictionary
+        """
+
+        # Create tuple (alphabet unit, code)
+        tuple_char_code = list(zip(list(lookup_table.keys()), list(lookup_table.values())))
+        # Sort by code
+        tuple_char_code.sort(key=lambda x: x[1])
+
+        # If each alphabet unit has a unique code and each code a unique alphabet unique ('bijective')
+        if unique_entry:
+            mapped_lookup = [[tp[0], i + 1] for i, tp in enumerate(tuple_char_code)]
+        else:
+            raise NotImplementedError
+            # Todo
+
+        return dict(mapped_lookup)
+
+    @classmethod
     def create_lookup_from_labels(cls, csv_files: List[str], export_lookup_filename: str,
                                   original_lookup_filename: str=None):
         """
@@ -116,11 +141,46 @@ class Alphabet:
             if el not in lookup.keys():
                 lookup[el] = max(lookup.values()) + 1 if lookup.values() else 0
 
-        lookup = map_lookup(lookup)
+        lookup = cls.map_lookup(lookup)
 
         # Save new lookup
         with open(export_lookup_filename, 'w', encoding='utf8') as f:
             json.dump(lookup, f)
+
+    @classmethod
+    def load_lookup_from_json(cls, json_filenames: Union[List[str], str]) -> dict:
+        """
+        Load a lookup table from a json file to a dictionnary
+        :param json_filenames: either a filename or a list of filenames
+        :return:
+        """
+
+        lookup = dict()
+        if isinstance(json_filenames, list):
+            for file in json_filenames:
+                with open(file, 'r', encoding='utf8') as f:
+                    data_dict = json.load(f)
+                lookup.update(data_dict)
+
+        elif isinstance(json_filenames, str):
+            with open(json_filenames, 'r', encoding='utf8') as f:
+                lookup = json.load(f)
+
+        return cls.map_lookup(lookup)
+
+    @classmethod
+    def make_json_lookup_alphabet(cls, string_chars: str = None) -> dict:
+        """
+
+        :param string_chars: for example string.ascii_letters, string.digits
+        :return:
+        """
+        lookup = dict()
+        if string_chars:
+            # Add characters to lookup table
+            lookup.update({char: ord(char) for char in string_chars})
+
+        return cls.map_lookup(lookup)
 
     @property
     def n_classes(self):
