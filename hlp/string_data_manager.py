@@ -59,10 +59,12 @@ def map_accentuated_characters_in_string(string_to_format: str, dict_mapping: di
     return string_to_format
 
 
-def format_string_for_tf_split(string_to_format: str, separator_character: str= '|',
+def format_string_for_tf_split(string_to_format: str,
+                               separator_character: str= '|',
                                replace_brackets_abbreviations=True) -> str:
     """
     Formats transcriptions to be split by tf.string_split using character separator "|"
+
     :param string_to_format: string to format
     :param separator_character: character that separates alphabet units
     :param replace_brackets_abbreviations: if True will replace '[' and ']' chars by separator character
@@ -98,6 +100,22 @@ def format_string_for_tf_split(string_to_format: str, separator_character: str= 
         final_string += separator_character
 
     return final_string
+
+
+def tf_crnn_label_formatting(csv_filename: str):
+
+    def _string_formatting(string_to_format: str,
+                           separator_character: str = '|'):
+        chars = list(string_to_format)
+        formated_string = separator_character + '{}'.format(separator_character).join(chars) + separator_character
+        return formated_string
+
+    df = pd.read_csv(csv_filename, sep=';', header=None, names=['image', 'labels'], encoding='utf8',
+                     escapechar="\\", quoting=3)
+
+    df.labels = df.labels.apply(lambda x: _string_formatting(x))
+
+    df.to_csv(csv_filename, sep=';', encoding='utf-8', header=False, index=False, escapechar="\\", quoting=3)
 
 
 def lower_abbreviation_in_string(string_to_format: str):

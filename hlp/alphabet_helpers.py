@@ -8,7 +8,8 @@ import json
 import numpy as np
 
 
-def get_alphabet_from_input_data(csv_filename: str, split_char: str='|'):
+def get_alphabet_units_from_input_data(csv_filename: str,
+                                       split_char: str='|'):
     """
     Get alphabet units from the input_data csv file (which contains in each row the tuple
     (filename image segment, transcription formatted))
@@ -24,6 +25,26 @@ def get_alphabet_from_input_data(csv_filename: str, split_char: str='|'):
     unique_units = np.unique([chars for list_chars in transcriptions for chars in list_chars])
 
     return unique_units
+
+
+def generate_alphabet_file(csv_filenames: List[str],
+                           alphabet_filename: str):
+    """
+
+    :param csv_filenames:
+    :param alphabet_filename:
+    :return:
+    """
+    symbols = list()
+    for file in csv_filenames:
+        symbols.append(get_alphabet_units_from_input_data(file))
+
+    alphabet_units = np.unique(np.concatenate(symbols))
+
+    alphabet_lookup = dict([(au, i+1)for i, au in enumerate(alphabet_units)])
+
+    with open(alphabet_filename, 'w') as f:
+        json.dump(alphabet_lookup, f)
 
 
 def get_abbreviations_from_csv(csv_filename: str) -> List[str]:
