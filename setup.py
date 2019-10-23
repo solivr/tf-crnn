@@ -15,14 +15,14 @@ setup(name='tf_crnn',
             'numpy',
             'tqdm',
             'sacred',
-            'better_exceptions',
             'opencv-python',
             'pandas',
             'click',
-            'tensorflow-addons>=0.5',
-            'tensorflow-gpu>=2.0'
+            'tensorflow-addons',
+            'tensorflow-gpu',
+            'taputapu'
       ],
-      dependency_links=['https://github.com/solivr/taputapu/tarball/master#egg=package-1.0'],
+      dependency_links=['https://github.com/solivr/taputapu/tarball/master#egg=taputapu-1.0'],
       extras_require={
             'doc': [
                   'sphinx',
