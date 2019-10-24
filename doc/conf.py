@@ -44,7 +44,8 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
-    # 'sphinx_autodoc_typehints'
+    'sphinxcontrib.bibtex',  # for bibtex
+    'sphinx_autodoc_typehints'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

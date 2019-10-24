@@ -10,6 +10,7 @@ TF-CRNN : A TensorFlow implementation of Convolutional Recurrent Neural Network
 
    start/index
    reference/index
+   references
 ..   :caption: Contents:
 
 A TensorFlow implementation of the Convolutional Recurrent Neural Network (CRNN) for image-based sequence recognition
