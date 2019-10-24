@@ -6,6 +6,7 @@ from typing import List, Union
 import csv
 import json
 import numpy as np
+import pandas as pd
 
 
 def get_alphabet_units_from_input_data(csv_filename: str,
@@ -18,9 +19,9 @@ def get_alphabet_units_from_input_data(csv_filename: str,
     :param split_char: splitting character in input_data separting the alphabet units
     :return:
     """
-    with open(csv_filename, 'r', encoding='utf8') as f:
-        csvreader = csv.reader(f, delimiter=';', quoting=csv.QUOTE_ALL)
-        transcriptions = [row[1].split(split_char) for row in csvreader]
+    df = pd.read_csv(csv_filename, sep=';', header=None, names=['image', 'labels'],
+                     encoding='utf8', escapechar="\\", quoting=3)
+    transcriptions = list(df.labels.apply(lambda x: x.split(split_char)))
 
     unique_units = np.unique([chars for list_chars in transcriptions for chars in list_chars])
 
