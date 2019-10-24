@@ -5,8 +5,8 @@ __license__ = "GPL"
 from taputapu.databases import iam
 import os
 from glob import glob
-from .string_data_manager import tf_crnn_label_formatting
-from .alphabet_helpers import generate_alphabet_file
+from string_data_manager import tf_crnn_label_formatting
+from alphabet_helpers import generate_alphabet_file
 import click
 
 

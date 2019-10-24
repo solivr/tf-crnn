@@ -11,6 +11,7 @@ from tqdm import tqdm, trange
 def csv_rel2abs_path_convertor(csv_filenames: str, delimiter: str=' ', encoding='utf8') -> None:
     """
     Convert relative paths into absolute paths
+
     :param csv_filenames: filename of csv
     :param delimiter: character to delimit felds in csv
     :param encoding: encoding format of csv file
@@ -40,6 +41,7 @@ def csv_filtering_chars_from_labels(csv_filename: str, chars_to_remove: str,
                                     delimiter: str=' ', encoding='utf8') -> int:
     """
     Remove labels containing chars_to_remove in csv_filename
+
     :param chars_to_remove: string (or list) with the undesired characters
     :param csv_filename: filenmae of csv
     :param delimiter: delimiter character
