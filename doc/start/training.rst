@@ -92,7 +92,7 @@ Training the model
 ^^^^^^^^^^^^^^^^^^
 
 Make sure the ``config.json`` file has the correct paths for training and validation data, as well as for the
-alphabet lookup file ad run: ::
+alphabet lookup file and run: ::
 
     python training.py with config.json
 

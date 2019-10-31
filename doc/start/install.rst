@@ -11,8 +11,15 @@ When using Anaconda (or Miniconda), conda will install automatically the compati
 
     conda env create -f environment.yml
 
-You can find more information about the installation procedures of CUDA and CuDNN with Anaconda
-`here <https://www.anaconda.com/blog/developer-blog/tensorflow-in-anaconda/>`_.
+
+From `this page <https://www.anaconda.com/blog/developer-blog/tensorflow-in-anaconda/>`_:
+
+    When the GPU accelerated version of TensorFlow is installed using conda, by the command
+    “conda install tensorflow-gpu”, these libraries are installed automatically, with versions
+    known to be compatible with the tensorflow-gpu package. Furthermore, conda installs these libraries
+    into a location where they will not interfere with other instances of these libraries that may have
+    been installed via another method. Regardless of using pip or conda-installed tensorflow-gpu,
+    the NVIDIA driver must be installed separately.
 
 ..    Using ``pip``
     ^^^^^^^^^^^^^
