@@ -46,8 +46,8 @@ def prepare_iam_data(download_dir: str,
                                   True)
 
     # Format string label to tf_crnn formatting
-        for csv_filenames in glob(os.path.join(export_csv_dir, '*')):
-            tf_crnn_label_formatting(csv_filenames)
+    for csv_filename in glob(os.path.join(export_csv_dir, '*')):
+        tf_crnn_label_formatting(csv_filename)
 
     # Generate alphabet
     alphabet_dir = os.path.join(generated_data_dir, 'generated_alphabet')
