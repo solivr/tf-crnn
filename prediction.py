@@ -9,7 +9,6 @@ import click
 from tf_crnn.callbacks import CustomPredictionSaverCallback, FOLDER_SAVED_MODEL
 from tf_crnn.config import Params
 from tf_crnn.data_handler import dataset_generator
-
 from tf_crnn.model import get_model_inference
 
 

@@ -14,6 +14,7 @@ import pandas as pd
 
 class CONST:
     DIMENSION_REDUCTION_W_POOLING = 2*2  # 2x2 pooling in dimension W on layer 1 and 2
+    PREPROCESSING_FOLDER = 'preprocessed'
 
 
 class Alphabet:

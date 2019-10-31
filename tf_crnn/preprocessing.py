@@ -5,7 +5,7 @@ __license__ = "GPL"
 import re
 import numpy as np
 import os
-from .config import Params
+from .config import Params, CONST
 import pandas as pd
 from typing import List, Tuple
 from taputapu.io.image import get_image_shape_without_loading
@@ -131,7 +131,7 @@ def data_preprocessing(params: Params) -> (str, str, int, int):
     :param params: parameters of the experiment (``Params``)
     :return: output path files, number of samples (for train and evaluation data)
     """
-    output_dir = os.path.join(params.output_model_dir, 'preprocessed')
+    output_dir = os.path.join(params.output_model_dir, CONST.PREPROCESSING_FOLDER)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     else:
