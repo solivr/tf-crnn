@@ -379,7 +379,7 @@ def dataset_generator(csv_filename: Union[List[str], str],
         if do_padding:
             with tf.name_scope('padding'):
                 image, img_width = padding_inputs_width(image, target_shape=params.input_shape,
-                                                        increment=CONST.DIMENSION_REDUCTION_W_POOLING) # todo this needs to be updated
+                                                        increment=params.downscale_factor) # todo this needs to be updated
         # Resize
         else:
             image = tf.image.resize(image, size=params.input_shape)
