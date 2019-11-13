@@ -11,5 +11,24 @@ This implementation is based on Tensorflow 2.0 and uses `tf.keras` and `tf.data`
 `tf_crnn` makes use of `tensorflow-gpu` package (so CUDA and cuDNN are needed). 
 
 You can install it using the `environment.yml` file provided and use it within an environment.
+    
+    conda env create -f environment.yml
 
-See the [docs](https://tf-crnn.readthedocs.io/en/latest/start/index.html#) for the installation procedures and how to use it.
+See also the [docs](https://tf-crnn.readthedocs.io/en/latest/start/index.html#) for more information.
+
+
+## Try it
+ 
+ Train a model with [IAM dataset](http://www.fki.inf.unibe.ch/databases/iam-handwriting-database).
+ 
+ **Generate the data in the correct format**
+
+    cd hlp
+    python prepare_iam.py --download_dir ../data/iam --generated_data_dir ../data/iam/generated
+    cd ..
+    
+**Train the model**
+
+    python training.py with config.json
+
+More details in the [documentation](https://tf-crnn.readthedocs.io/en/latest/start/training.html).
