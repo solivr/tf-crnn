@@ -6,6 +6,8 @@ Implementation of a Convolutional Recurrent Neural Network (CRNN) for image-base
 
 This implementation is based on Tensorflow 2.0 and uses `tf.keras` and `tf.data` modules to build the model and to handle input data.
 
+To access the previous version implementing Shi et al. paper, go to the [v.0.5.2](https://github.com/solivr/tf-crnn/tree/v0.5.2) tag.
+
 
 ## Installation
 `tf_crnn` makes use of `tensorflow-gpu` package (so CUDA and cuDNN are needed). 
