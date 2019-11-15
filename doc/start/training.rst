@@ -74,9 +74,17 @@ Example of training
 We will use the `IAM Database <http://www.fki.inf.unibe.ch/databases/iam-handwriting-database>`_ :cite:`marti2002iam`
 as an example to generate the data in the correct input data and train a model.
 
+Go to the official page to download the dataset and create an account in order to access the data.
+You don't need to download the data yourself, the ``prepare_iam.py`` script will take care of that for you.
 
 Generating data
 ^^^^^^^^^^^^^^^
+
+First create the ``IAM_USER`` and ``IAM_PWD`` environment variable to store your credentials, they will be used by the download script ::
+
+    export IAM_USER=<your-username>
+    export IAM_PWD=<your-password>
+
 
 Run the script ``hlp/prepare_iam.py`` in order to download the data, extract it and format it correctly to train a model. ::
 

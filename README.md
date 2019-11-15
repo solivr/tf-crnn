@@ -21,6 +21,15 @@ See also the [docs](https://tf-crnn.readthedocs.io/en/latest/start/index.html#) 
  
  Train a model with [IAM dataset](http://www.fki.inf.unibe.ch/databases/iam-handwriting-database).
  
+ **Create an account**
+ 
+ Create an account on the official IAM dataset page in order to access the data.
+ Export your credentials as enviornment variables, they will be used by the download script.
+ 
+    export IAM_USER=<your-username>
+    export IAM_PWD=<your-password>
+ 
+ 
  **Generate the data in the correct format**
 
     cd hlp
@@ -31,4 +40,4 @@ See also the [docs](https://tf-crnn.readthedocs.io/en/latest/start/index.html#) 
 
     python training.py with config.json
 
-More details in the [documentation](https://tf-crnn.readthedocs.io/en/latest/start/training.html).
+More details in the [documentation](https://tf-crnn.readthedocs.io/en/latest/start/training.html#example-of-training).
