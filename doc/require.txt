@@ -1,0 +1,5 @@
+sphinx
+sphinx-autodoc-typehints
+sphinx-rtd-theme
+sphinxcontrib-bibtex
+sphinxcontrib-websupport
